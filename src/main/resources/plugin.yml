@@ -1,0 +1,18 @@
+name: OPPanel
+version: 1.0.0
+main: com.chaossmp.oppanel.OPPanel
+api-version: '1.21'
+author: ChaosSMP
+description: Эксклюзивная панель управления для владельца ChaosSMP
+
+commands:
+  oppanel:
+    description: Открыть панель владельца
+    usage: /oppanel
+    permission: oppanel.use
+    permission-message: У вас нет прав на использование этой команды!
+
+permissions:
+  oppanel.use:
+    description: Дает полный доступ к панели управления /oppanel
+    default: op
