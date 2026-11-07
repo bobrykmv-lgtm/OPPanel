@@ -121,7 +121,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         player.openInventory(gui);
     }
 
-    // --- 3. МЕНЮ ДІЙ НАД ГРАВЦЕМ (+ Інфо опція) ---
+    // --- 3. МЕНЮ ДІЙ НАД ГРАВЦЕМ ---
     public void openPunishMenu(Player admin, Player target) {
         selectedTarget.put(admin.getUniqueId(), target.getUniqueId());
         Inventory gui = Bukkit.createInventory(null, 27, PUNISH_PREFIX + target.getName());
@@ -131,7 +131,6 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         gui.setItem(10, createGuiItem(Material.ENDER_PEARL, "§2ТП игрока к себе", List.of("§7Притянуть §f" + target.getName() + " §7к себе")));
         gui.setItem(11, createGuiItem(Material.CHEST, "§eИнспекция инвентаря", List.of("§7Просмотр вещей игрока")));
         
-        // Додаткова опція: Повна інформація про гравця
         gui.setItem(12, createGuiItem(Material.BOOK, "§bИнформация об игроке", List.of(
                 "§7Мир: §f" + target.getWorld().getName(),
                 "§7Координаты: §e" + target.getLocation().getBlockX() + ", " + target.getLocation().getBlockY() + ", " + target.getLocation().getBlockZ(),
@@ -147,13 +146,14 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         admin.openInventory(gui);
     }
 
-    // --- 4. РОЗШИРЕНЕ МЕНЮ ВИБОРУ ТЕРМІНІВ (1m, 1h, 1d, 1w, 1M, Perm) ---
+    // --- 4. РОЗШИРЕНЕ МЕНЮ ВИБОРУ ТЕРМІНІВ ---
     public void openDurationMenu(Player admin, String punishType) {
         pendingPunishmentType.put(admin.getUniqueId(), punishType);
         Inventory gui = Bukkit.createInventory(null, 27, DURATION_PREFIX + punishType);
         fillBorder(gui);
 
-        gui.setItem(10, createGuiItem(Material.WOODEN_CLOCK, "§71 Минута (1m)", List.of("§7Длительность: 60 секунд")));
+        // Виправлено Material.WOODEN_CLOCK на Material.CLOCK
+        gui.setItem(10, createGuiItem(Material.CLOCK, "§71 Минута (1m)", List.of("§7Длительность: 60 секунд")));
         gui.setItem(11, createGuiItem(Material.CLOCK, "§e1 Час (1h)", List.of("§7Длительность: 1 час")));
         gui.setItem(13, createGuiItem(Material.PAPER, "§61 День (1d)", List.of("§7Длительность: 24 часа")));
         gui.setItem(14, createGuiItem(Material.BOOK, "§c1 Неделя (1w)", List.of("§7Длительность: 7 дней")));
@@ -163,7 +163,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         admin.openInventory(gui);
     }
 
-    // --- 5. МЕНЮ ВИБОРУ ТИПУ РОЗБАНУ (Нік чи IP) ---
+    // --- 5. МЕНЮ ВИБОРУ ТИПУ РОЗБАНУ ---
     public void openUnbanTypeMenu(Player player) {
         Inventory gui = Bukkit.createInventory(null, 27, UNBAN_TYPE_TITLE);
         fillBorder(gui);
@@ -260,14 +260,13 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
 
         if (clickedInv == null) return;
 
-        // Головне меню
         if (title.equals(MAIN_TITLE)) {
             event.setCancelled(true);
             switch (event.getSlot()) {
                 case 10 -> openPlayerListMenu(player);
                 case 12 -> openMainMenu(player);
                 case 14 -> openWeatherMenu(player);
-                case 15 -> openUnbanTypeMenu(player); // Відкрити вибір типу розбану
+                case 15 -> openUnbanTypeMenu(player);
                 case 16 -> {
                     if (player.getGameMode() == GameMode.SPECTATOR) player.setGameMode(GameMode.SURVIVAL);
                     else player.setGameMode(GameMode.SPECTATOR);
@@ -275,14 +274,12 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                 }
             }
         } 
-        // Вибір типу розбану (Нік чи IP)
         else if (title.equals(UNBAN_TYPE_TITLE)) {
             event.setCancelled(true);
             if (event.getSlot() == 11) openUnbanNameMenu(player);
             else if (event.getSlot() == 15) openUnbanIpMenu(player);
             else if (event.getSlot() == 22) openMainMenu(player);
         }
-        // Розбан по нику
         else if (title.equals(UNBAN_NAME_TITLE)) {
             event.setCancelled(true);
             if (event.getSlot() == 53) {
@@ -302,7 +299,6 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                 }
             }
         }
-        // Розбан по IP
         else if (title.equals(UNBAN_IP_TITLE)) {
             event.setCancelled(true);
             if (event.getSlot() == 53) {
@@ -313,7 +309,6 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
             if (item != null && item.getType() == Material.PAPER) {
                 ItemMeta meta = item.getItemMeta();
                 if (meta != null && meta.getDisplayName() != null) {
-                    // Витягуємо IP з назви предмета "§cIP: 127.0.0.1"
                     String ip = meta.getDisplayName().replace("§cIP: ", "").trim();
                     Bukkit.getBanList(org.bukkit.BanList.Type.IP).pardon(ip);
                     player.sendMessage(ChatColor.GREEN + "IP-адрес " + ip + " успешно разбанен!");
@@ -321,7 +316,6 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                 }
             }
         }
-        // Меню погоди та часу
         else if (title.equals(WEATHER_TITLE)) {
             event.setCancelled(true);
             World world = player.getWorld();
@@ -335,7 +329,6 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
             }
             player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1f);
         }
-        // Список гравців
         else if (title.equals(PLAYERS_TITLE)) {
             event.setCancelled(true);
             if (event.getSlot() == 53) {
@@ -352,7 +345,6 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                 }
             }
         } 
-        // Меню дій над гравцем
         else if (title.startsWith(PUNISH_PREFIX)) {
             event.setCancelled(true);
             UUID targetUUID = selectedTarget.get(player.getUniqueId());
@@ -374,13 +366,13 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                     player.sendMessage(ChatColor.GREEN + "Игрок телепортирован к вам.");
                 }
                 case 11 -> player.openInventory(target.getInventory());
-                case 12 -> { /* Кнопка інфо (тільки перегляд в лорі) */ }
+                case 12 -> { }
                 case 13 -> {
                     target.kickPlayer("§cВы были кикнуты администратором.");
                     player.sendMessage(ChatColor.YELLOW + "Игрок " + target.getName() + " кикнут.");
                     openPlayerListMenu(player);
                 }
-                case 14 -> { // Варн / Unwarn
+                case 14 -> {
                     if (event.isRightClick()) {
                         player.performCommand("unwarn " + target.getName());
                         player.sendMessage(ChatColor.GREEN + "Снят варн с игрока " + target.getName());
@@ -388,7 +380,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                         openDurationMenu(player, "Warn");
                     }
                 }
-                case 15 -> { // Мут / Unmute
+                case 15 -> {
                     if (event.isRightClick()) {
                         player.performCommand("unmute " + target.getName());
                         player.sendMessage(ChatColor.GREEN + "Снят мут с игрока " + target.getName());
@@ -399,7 +391,6 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                 case 16 -> openDurationMenu(player, "Ban");
             }
         } 
-        // Меню термінів
         else if (title.startsWith(DURATION_PREFIX)) {
             event.setCancelled(true);
             UUID targetUUID = selectedTarget.get(player.getUniqueId());
@@ -415,8 +406,8 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                 case 10 -> "1m";
                 case 11 -> "1h";
                 case 13 -> "1d";
-                case 14 -> "7d"; // або 1w (залежно від плагіна, передаємо стандартний формат)
-                case 15 -> "30d"; // 1M
+                case 14 -> "7d";
+                case 15 -> "30d";
                 case 16 -> "perm";
                 default -> null;
             };
