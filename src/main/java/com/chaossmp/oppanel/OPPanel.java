@@ -27,21 +27,25 @@ import java.util.UUID;
 
 public final class OPPanel extends JavaPlugin implements Listener, CommandExecutor {
 
-    private final String MAIN_TITLE = "§8» §c§lOPPanel v2.2 §7| Главная";
+    private final String MAIN_TITLE = "§8» §c§lOPPanel v2.4 §7| Главная";
     private final String PLAYERS_TITLE = "§8» §c§lOPPanel §7| Выбор Игрока";
     private final String PUNISH_PREFIX = "§8» §c§lМеню: ";
     private final String DURATION_PREFIX = "§8» §e§lСрок: ";
-    private final String UNBAN_TITLE = "§8» §2§lРазбан игроков";
+    private final String UNBAN_TYPE_TITLE = "§8» §2§lВыбор типа разбана";
+    private final String UNBAN_NAME_TITLE = "§8» §2§lРазбан по Нику";
+    private final String UNBAN_IP_TITLE = "§8» §2§lРазбан по IP";
+    private final String WEATHER_TITLE = "§8» §b§lВремя и Погода";
 
-    // Зберігаємо обраного гравця та тип покарання для адміністратора
     private final Map<UUID, UUID> selectedTarget = new HashMap<>();
     private final Map<UUID, String> pendingPunishmentType = new HashMap<>();
 
     @Override
     public void onEnable() {
         Bukkit.getPluginManager().registerEvents(this, this);
-        getCommand("oppanel").setExecutor(this);
-        getLogger().info("OPPanel 2.2 успешно активирован!");
+        if (getCommand("oppanel") != null) {
+            getCommand("oppanel").setExecutor(this);
+        }
+        getLogger().info("OPPanel 2.4 успешно активирован!");
     }
 
     @Override
@@ -75,12 +79,11 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                         "§7ОЗУ: §b" + (int) ramUsed + "MB / " + (int) ramMax + "MB",
                         "§7Онлайн: §f" + Bukkit.getOnlinePlayers().size() + " чел.")));
 
-        gui.setItem(14, createGuiItem(Material.CLOCK, "§b§lМир и Погода",
-                List.of("§7Смена времени суток (День/Ночь)", "§7и погоды.")));
+        gui.setItem(14, createGuiItem(Material.CLOCK, "§b§lВремя и Погода",
+                List.of("§7Выбрать день/ночь,", "§7солнце или дождь/грозу.")));
 
-        // Кнопка списку забанених для розбану (Слот 15)
         gui.setItem(15, createGuiItem(Material.GOLDEN_APPLE, "§2§lСистема Разбана",
-                List.of("§7Список заблокированных игроков", "§7для быстрого помилования.")));
+                List.of("§7Управление банами по никам §7и IP-адресам.")));
 
         boolean isSpectator = player.getGameMode() == GameMode.SPECTATOR;
         gui.setItem(16, createGuiItem(Material.ENDER_EYE, "§d§lРежим Спектатора",
@@ -105,7 +108,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                 meta.setDisplayName("§e" + target.getName());
                 meta.setLore(List.of(
                         "§7Здоровье: §c" + (int) target.getHealth() + "/20",
-                        "§7Пипнг: §a" + target.getPing() + "ms",
+                        "§7Пинг: §a" + target.getPing() + "ms",
                         "",
                         "§eНажмите для меню действий!"
                 ));
@@ -118,41 +121,63 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         player.openInventory(gui);
     }
 
-    // --- 3. МЕНЮ ДІЙ НАД ГРАВЦЕМ ---
+    // --- 3. МЕНЮ ДІЙ НАД ГРАВЦЕМ (+ Інфо опція) ---
     public void openPunishMenu(Player admin, Player target) {
         selectedTarget.put(admin.getUniqueId(), target.getUniqueId());
         Inventory gui = Bukkit.createInventory(null, 27, PUNISH_PREFIX + target.getName());
         fillBorder(gui);
 
-        gui.setItem(10, createGuiItem(Material.COMPASS, "§aТП к игроку", List.of("§7Телепортироваться к §f" + target.getName())));
-        gui.setItem(11, createGuiItem(Material.ENDER_PEARL, "§2ТП игрока к себе", List.of("§7Притянуть §f" + target.getName() + " §7к себе")));
-        gui.setItem(12, createGuiItem(Material.CHEST, "§eИнспекция инвентаря", List.of("§7Просмотр вещей игрока")));
+        gui.setItem(9, createGuiItem(Material.COMPASS, "§aТП к игроку", List.of("§7Телепортироваться к §f" + target.getName())));
+        gui.setItem(10, createGuiItem(Material.ENDER_PEARL, "§2ТП игрока к себе", List.of("§7Притянуть §f" + target.getName() + " §7к себе")));
+        gui.setItem(11, createGuiItem(Material.CHEST, "§eИнспекция инвентаря", List.of("§7Просмотр вещей игрока")));
         
+        // Додаткова опція: Повна інформація про гравця
+        gui.setItem(12, createGuiItem(Material.BOOK, "§bИнформация об игроке", List.of(
+                "§7Мир: §f" + target.getWorld().getName(),
+                "§7Координаты: §e" + target.getLocation().getBlockX() + ", " + target.getLocation().getBlockY() + ", " + target.getLocation().getBlockZ(),
+                "§7Режим игры: §f" + target.getGameMode().name(),
+                "§7IP: §c" + (target.getAddress() != null ? target.getAddress().getAddress().getHostAddress() : "неизвестно")
+        )));
+
         gui.setItem(13, createGuiItem(Material.FEATHER, "§cКикнуть игрока", List.of("§7Мгновенный кик с сервера")));
-        gui.setItem(14, createGuiItem(Material.PAPER, "§6Выдать Варн", List.of("§7Нажмите для выбора срока")));
-        gui.setItem(15, createGuiItem(Material.ANVIL, "§dВыдать Мут", List.of("§7Нажмите для выбора срока")));
+        gui.setItem(14, createGuiItem(Material.PAPER, "§6Варн / Снять варн", List.of("§eЛКМ — Выдать Варн", "§aПКМ — Снять Варн (Unwarn)")));
+        gui.setItem(15, createGuiItem(Material.ANVIL, "§dМут / Снять мут", List.of("§eЛКМ — Выдать Мут", "§aПКМ — Снять Мут (Unmute)")));
         gui.setItem(16, createGuiItem(Material.REDSTONE_BLOCK, "§4Забанить игрока", List.of("§7Нажмите для выбора срока / пермамента")));
 
         admin.openInventory(gui);
     }
 
-    // --- 4. МЕНЮ ВИБОРУ ТЕРМІНУ (Срок) ---
+    // --- 4. РОЗШИРЕНЕ МЕНЮ ВИБОРУ ТЕРМІНІВ (1m, 1h, 1d, 1w, 1M, Perm) ---
     public void openDurationMenu(Player admin, String punishType) {
         pendingPunishmentType.put(admin.getUniqueId(), punishType);
         Inventory gui = Bukkit.createInventory(null, 27, DURATION_PREFIX + punishType);
         fillBorder(gui);
 
+        gui.setItem(10, createGuiItem(Material.WOODEN_CLOCK, "§71 Минута (1m)", List.of("§7Длительность: 60 секунд")));
         gui.setItem(11, createGuiItem(Material.CLOCK, "§e1 Час (1h)", List.of("§7Длительность: 1 час")));
         gui.setItem(13, createGuiItem(Material.PAPER, "§61 День (1d)", List.of("§7Длительность: 24 часа")));
-        gui.setItem(14, createGuiItem(Material.BOOK, "§c7 Дней (7d)", List.of("§7Длительность: 1 неделя")));
+        gui.setItem(14, createGuiItem(Material.BOOK, "§c1 Неделя (1w)", List.of("§7Длительность: 7 дней")));
+        gui.setItem(15, createGuiItem(Material.ENCHANTED_BOOK, "§51 Месяц (1M)", List.of("§7Длительность: ~30 дней")));
         gui.setItem(16, createGuiItem(Material.NETHERITE_BLOCK, "§4Перманентно (Perm)", List.of("§4Навсегда")));
 
         admin.openInventory(gui);
     }
 
-    // --- 5. МЕНЮ РОЗБАНУ (Список заблокованих) ---
-    public void openUnbanMenu(Player player) {
-        Inventory gui = Bukkit.createInventory(null, 54, UNBAN_TITLE);
+    // --- 5. МЕНЮ ВИБОРУ ТИПУ РОЗБАНУ (Нік чи IP) ---
+    public void openUnbanTypeMenu(Player player) {
+        Inventory gui = Bukkit.createInventory(null, 27, UNBAN_TYPE_TITLE);
+        fillBorder(gui);
+
+        gui.setItem(11, createGuiItem(Material.PLAYER_HEAD, "§a§lРазбан по Нику", List.of("§7Открыть список забаненных §7по никам игроков.")));
+        gui.setItem(15, createGuiItem(Material.IRON_BARS, "§c§lРазбан по IP", List.of("§7Открыть список заблокированных §7IP-адресов.")));
+        gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад в главное меню"));
+
+        player.openInventory(gui);
+    }
+
+    // --- 6. СПИСОК РОЗБАНУ ПО НІКУ ---
+    public void openUnbanNameMenu(Player player) {
+        Inventory gui = Bukkit.createInventory(null, 54, UNBAN_NAME_TITLE);
         fillBorder(gui);
 
         int slot = 10;
@@ -169,20 +194,64 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                         "§7Причина: §f" + entry.getReason(),
                         "§7Кем выдано: §e" + entry.getSource(),
                         "",
-                        "§2ЛКМ — Разбанить игрока!"
+                        "§2ЛКМ — Разбанить по нику!"
                 ));
                 head.setItemMeta(meta);
             }
             gui.setItem(slot, head);
             slot++;
-            if ((slot + 1) % 9 == 0) slot += 2; // Перехід на наступний рядок усередині рамки
+            if ((slot + 1) % 9 == 0) slot += 2;
         }
 
-        gui.setItem(53, createGuiItem(Material.BARRIER, "§cНазад в главное меню"));
+        gui.setItem(53, createGuiItem(Material.BARRIER, "§cНазад к выбору типа"));
         player.openInventory(gui);
     }
 
-    // --- 6. ОБРОБКА КЛІКІВ У GUI ---
+    // --- 7. СПИСОК РОЗБАНУ ПО IP ---
+    public void openUnbanIpMenu(Player player) {
+        Inventory gui = Bukkit.createInventory(null, 54, UNBAN_IP_TITLE);
+        fillBorder(gui);
+
+        int slot = 10;
+        for (org.bukkit.BanEntry entry : Bukkit.getBanList(org.bukkit.BanList.Type.IP).getBanEntries()) {
+            if (slot >= 44) break;
+
+            ItemStack item = new ItemStack(Material.PAPER);
+            ItemMeta meta = item.getItemMeta();
+            if (meta != null) {
+                meta.setDisplayName("§cIP: " + entry.getTarget());
+                meta.setLore(List.of(
+                        "§7Причина: §f" + entry.getReason(),
+                        "§7Кем выдано: §e" + entry.getSource(),
+                        "",
+                        "§2ЛКМ — Разбанить этот IP!"
+                ));
+                item.setItemMeta(meta);
+            }
+            gui.setItem(slot, item);
+            slot++;
+            if ((slot + 1) % 9 == 0) slot += 2;
+        }
+
+        gui.setItem(53, createGuiItem(Material.BARRIER, "§cНазад к выбору типа"));
+        player.openInventory(gui);
+    }
+
+    // --- 8. МЕНЮ ВИБОРУ ЧАСУ ТА ПОГОДИ ---
+    public void openWeatherMenu(Player player) {
+        Inventory gui = Bukkit.createInventory(null, 27, WEATHER_TITLE);
+        fillBorder(gui);
+
+        gui.setItem(10, createGuiItem(Material.YELLOW_WOOL, "§e§lУтро (День)", List.of("§7Установить время: День")));
+        gui.setItem(12, createGuiItem(Material.BLACK_WOOL, "§8§lНочь", List.of("§7Установить время: Ночь")));
+        gui.setItem(14, createGuiItem(Material.SUNFLOWER, "§b§lЯсно (Солнце)", List.of("§7Убрать дождь и грозу")));
+        gui.setItem(16, createGuiItem(Material.WATER_BUCKET, "§9§lДождь / Гроза", List.of("§7Включить осадки")));
+        gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад в главное меню"));
+
+        player.openInventory(gui);
+    }
+
+    // --- 9. ОБРОБКА КЛІКІВ У GUI ---
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
@@ -197,13 +266,8 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
             switch (event.getSlot()) {
                 case 10 -> openPlayerListMenu(player);
                 case 12 -> openMainMenu(player);
-                case 14 -> {
-                    World world = player.getWorld();
-                    if (world.getTime() > 13000) world.setTime(1000);
-                    else world.setTime(13000);
-                    player.sendMessage(ChatColor.YELLOW + "[OPPanel] Время изменено!");
-                }
-                case 15 -> openUnbanMenu(player); // Відкрити меню розбану
+                case 14 -> openWeatherMenu(player);
+                case 15 -> openUnbanTypeMenu(player); // Відкрити вибір типу розбану
                 case 16 -> {
                     if (player.getGameMode() == GameMode.SPECTATOR) player.setGameMode(GameMode.SURVIVAL);
                     else player.setGameMode(GameMode.SPECTATOR);
@@ -211,7 +275,67 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                 }
             }
         } 
-        // Вибір гравця
+        // Вибір типу розбану (Нік чи IP)
+        else if (title.equals(UNBAN_TYPE_TITLE)) {
+            event.setCancelled(true);
+            if (event.getSlot() == 11) openUnbanNameMenu(player);
+            else if (event.getSlot() == 15) openUnbanIpMenu(player);
+            else if (event.getSlot() == 22) openMainMenu(player);
+        }
+        // Розбан по нику
+        else if (title.equals(UNBAN_NAME_TITLE)) {
+            event.setCancelled(true);
+            if (event.getSlot() == 53) {
+                openUnbanTypeMenu(player);
+                return;
+            }
+            ItemStack item = event.getCurrentItem();
+            if (item != null && item.getType() == Material.PLAYER_HEAD) {
+                SkullMeta meta = (SkullMeta) item.getItemMeta();
+                if (meta != null && meta.getOwningPlayer() != null) {
+                    String targetName = meta.getOwningPlayer().getName();
+                    if (targetName != null) {
+                        Bukkit.getBanList(org.bukkit.BanList.Type.NAME).pardon(targetName);
+                        player.sendMessage(ChatColor.GREEN + "Игрок " + targetName + " успешно разбанен по нику!");
+                        openUnbanNameMenu(player);
+                    }
+                }
+            }
+        }
+        // Розбан по IP
+        else if (title.equals(UNBAN_IP_TITLE)) {
+            event.setCancelled(true);
+            if (event.getSlot() == 53) {
+                openUnbanTypeMenu(player);
+                return;
+            }
+            ItemStack item = event.getCurrentItem();
+            if (item != null && item.getType() == Material.PAPER) {
+                ItemMeta meta = item.getItemMeta();
+                if (meta != null && meta.getDisplayName() != null) {
+                    // Витягуємо IP з назви предмета "§cIP: 127.0.0.1"
+                    String ip = meta.getDisplayName().replace("§cIP: ", "").trim();
+                    Bukkit.getBanList(org.bukkit.BanList.Type.IP).pardon(ip);
+                    player.sendMessage(ChatColor.GREEN + "IP-адрес " + ip + " успешно разбанен!");
+                    openUnbanIpMenu(player);
+                }
+            }
+        }
+        // Меню погоди та часу
+        else if (title.equals(WEATHER_TITLE)) {
+            event.setCancelled(true);
+            World world = player.getWorld();
+
+            switch (event.getSlot()) {
+                case 10 -> { world.setTime(1000); player.sendMessage(ChatColor.YELLOW + "[OPPanel] Установлен день!"); }
+                case 12 -> { world.setTime(13000); player.sendMessage(ChatColor.BLUE + "[OPPanel] Установлена ночь!"); }
+                case 14 -> { world.setStorm(false); world.setThundering(false); player.sendMessage(ChatColor.AQUA + "[OPPanel] Установлена ясная погода!"); }
+                case 16 -> { world.setStorm(true); player.sendMessage(ChatColor.DARK_AQUA + "[OPPanel] Включен дождь!"); }
+                case 22 -> openMainMenu(player);
+            }
+            player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1f);
+        }
+        // Список гравців
         else if (title.equals(PLAYERS_TITLE)) {
             event.setCancelled(true);
             if (event.getSlot() == 53) {
@@ -241,26 +365,41 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
             }
 
             switch (event.getSlot()) {
-                case 10 -> {
+                case 9 -> {
                     player.teleport(target.getLocation());
                     player.sendMessage(ChatColor.GREEN + "Вы телепортировались к " + target.getName());
                 }
-                case 11 -> {
+                case 10 -> {
                     target.teleport(player.getLocation());
                     player.sendMessage(ChatColor.GREEN + "Игрок телепортирован к вам.");
                 }
-                case 12 -> player.openInventory(target.getInventory());
+                case 11 -> player.openInventory(target.getInventory());
+                case 12 -> { /* Кнопка інфо (тільки перегляд в лорі) */ }
                 case 13 -> {
-                    target.kickPlayer("§cВы были кикнуты администратором.\n§7Причина: Нарушение правил");
+                    target.kickPlayer("§cВы были кикнуты администратором.");
                     player.sendMessage(ChatColor.YELLOW + "Игрок " + target.getName() + " кикнут.");
                     openPlayerListMenu(player);
                 }
-                case 14 -> openDurationMenu(player, "Warn");  // Вибір терміну для Варна
-                case 15 -> openDurationMenu(player, "Mute");  // Вибір терміну для Мута
-                case 16 -> openDurationMenu(player, "Ban");   // Вибір терміну для Бана
+                case 14 -> { // Варн / Unwarn
+                    if (event.isRightClick()) {
+                        player.performCommand("unwarn " + target.getName());
+                        player.sendMessage(ChatColor.GREEN + "Снят варн с игрока " + target.getName());
+                    } else {
+                        openDurationMenu(player, "Warn");
+                    }
+                }
+                case 15 -> { // Мут / Unmute
+                    if (event.isRightClick()) {
+                        player.performCommand("unmute " + target.getName());
+                        player.sendMessage(ChatColor.GREEN + "Снят мут с игрока " + target.getName());
+                    } else {
+                        openDurationMenu(player, "Mute");
+                    }
+                }
+                case 16 -> openDurationMenu(player, "Ban");
             }
         } 
-        // Меню вибору терміну (Срок)
+        // Меню термінів
         else if (title.startsWith(DURATION_PREFIX)) {
             event.setCancelled(true);
             UUID targetUUID = selectedTarget.get(player.getUniqueId());
@@ -273,9 +412,11 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
             }
 
             String duration = switch (event.getSlot()) {
+                case 10 -> "1m";
                 case 11 -> "1h";
                 case 13 -> "1d";
-                case 14 -> "7d";
+                case 14 -> "7d"; // або 1w (залежно від плагіна, передаємо стандартний формат)
+                case 15 -> "30d"; // 1M
                 case 16 -> "perm";
                 default -> null;
             };
@@ -301,27 +442,6 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                     }
                 }
                 openPlayerListMenu(player);
-            }
-        } 
-        // Меню розбану гравців
-        else if (title.equals(UNBAN_TITLE)) {
-            event.setCancelled(true);
-            if (event.getSlot() == 53) {
-                openMainMenu(player);
-                return;
-            }
-
-            ItemStack item = event.getCurrentItem();
-            if (item != null && item.getType() == Material.PLAYER_HEAD) {
-                SkullMeta meta = (SkullMeta) item.getItemMeta();
-                if (meta != null && meta.getOwningPlayer() != null) {
-                    String targetName = meta.getOwningPlayer().getName();
-                    if (targetName != null) {
-                        Bukkit.getBanList(org.bukkit.BanList.Type.NAME).pardon(targetName);
-                        player.sendMessage(ChatColor.GREEN + "Игрок " + targetName + " успешно разбанен!");
-                        openUnbanMenu(player); // Оновити список
-                    }
-                }
             }
         }
     }
