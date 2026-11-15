@@ -312,7 +312,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         boolean keepInv = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.KEEP_INVENTORY));
         boolean mobGrief = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.MOB_GRIEFING));
         boolean fireTick = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.DO_FIRE_TICK));
-        boolean tntExplode = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.TNT_EXPLOSION));
+        boolean tntExplode = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.TNT));
 
         gui.setItem(10, createGuiItem(Material.CLOCK, "§b§lВремя и Погода", List.of("§7Управление днем, ночью и дождем")));
         gui.setItem(12, createGuiItem(Material.TOTEM_OF_UNDYING, "§e§lKeepInventory: " + (keepInv ? "§aВКЛ" : "§cВЫКЛ")));
@@ -496,7 +496,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                 case 12 -> { boolean c = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.KEEP_INVENTORY)); w.setGameRule(GameRule.KEEP_INVENTORY, !c); openWorldFilesSubfolder(player); }
                 case 13 -> { boolean c = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.MOB_GRIEFING)); w.setGameRule(GameRule.MOB_GRIEFING, !c); openWorldFilesSubfolder(player); }
                 case 14 -> { boolean c = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.DO_FIRE_TICK)); w.setGameRule(GameRule.DO_FIRE_TICK, !c); openWorldFilesSubfolder(player); }
-                case 15 -> { boolean c = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.TNT_EXPLOSION)); w.setGameRule(GameRule.TNT_EXPLOSION, !c); openWorldFilesSubfolder(player); }
+                case 15 -> { boolean c = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.TNT)); w.setGameRule(GameRule.TNT, !c); openWorldFilesSubfolder(player); }
                 case 22 -> openSettingsFolder(player);
             }
         } else if (title.equals(SUBFOLDER_ADMIN_TOOLS)) {
