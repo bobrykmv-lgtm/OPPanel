@@ -10,24 +10,23 @@ import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 public final class OPPanel extends JavaPlugin implements Listener, CommandExecutor {
 
-    private final String MAIN_TITLE = "§8» §c§lOPPanel v2.4 §7| Главная";
+    private final String MAIN_TITLE = "§8» §c§lOPPanel v2.6 §7| Главная";
     private final String PLAYERS_TITLE = "§8» §c§lOPPanel §7| Выбор Игрока";
     private final String PUNISH_PREFIX = "§8» §c§lМеню: ";
     private final String DURATION_PREFIX = "§8» §e§lСрок: ";
@@ -35,9 +34,21 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
     private final String UNBAN_NAME_TITLE = "§8» §2§lРазбан по Нику";
     private final String UNBAN_IP_TITLE = "§8» §2§lРазбан по IP";
     private final String WEATHER_TITLE = "§8» §b§lВремя и Погода";
+    private final String SETTINGS_TITLE = "§8» §5§lНастройки OPPanel";
+    private final String SERVER_CONTROL_TITLE = "§8» §4§lУправление Сервером";
+    private final String WORLD_TP_TITLE = "§8» §d§lТелепортация по Мирам";
 
     private final Map<UUID, UUID> selectedTarget = new HashMap<>();
     private final Map<UUID, String> pendingPunishmentType = new HashMap<>();
+    
+    // Збереження історії TPS (останні 6 значень)
+    private final List<Double> tpsHistory = new ArrayList<>();
+    
+    // Особисті налаштування адмінів
+    private final Set<UUID> adminNotificationsDisabled = new HashSet<>();
+
+    // Стан тиші у чаті (Global Chat Mute)
+    private static boolean chatMuted = false;
 
     @Override
     public void onEnable() {
@@ -45,7 +56,19 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         if (getCommand("oppanel") != null) {
             getCommand("oppanel").setExecutor(this);
         }
-        getLogger().info("OPPanel 2.4 успешно активирован!");
+
+        // Запуск задачі моніторингу TPS та Smart Doctor
+        startServerDoctorTask();
+
+        getLogger().info("OPPanel 2.6 успешно активирован!");
+    }
+
+    @Override
+    public void onDisable() {
+        selectedTarget.clear();
+        pendingPunishmentType.clear();
+        tpsHistory.clear();
+        getLogger().info("OPPanel выключен.");
     }
 
     @Override
@@ -64,6 +87,58 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         return true;
     }
 
+    // --- ОБРОБКА ТИШІ У ЧАТІ ---
+    @EventHandler
+    public void onChat(AsyncPlayerChatEvent event) {
+        Player player = event.getPlayer();
+        if (chatMuted && !player.hasPermission("oppanel.admin") && !player.isOp()) {
+            event.setCancelled(true);
+            player.sendMessage("§c[OPPanel] Чат наразі на занепаді (увімкнено режим тиші). Говорити можуть лише адміністратори!");
+        }
+    }
+
+    // --- ФОНОВИЙ МОНІТОРИНГ ТА АВТО-ЛАГОДЖЕННЯ (SMART DOCTOR) ---
+    private void startServerDoctorTask() {
+        Bukkit.getScheduler().runTaskTimer(this, () -> {
+            double currentTps = Bukkit.getTPS()[0];
+            
+            tpsHistory.add(currentTps);
+            if (tpsHistory.size() > 6) {
+                tpsHistory.remove(0);
+            }
+
+            if (currentTps < 15.0) {
+                int cleaned = executeSmartClean();
+                for (Player p : Bukkit.getOnlinePlayers()) {
+                    if ((p.isOp() || p.hasPermission("oppanel.admin")) && !adminNotificationsDisabled.contains(p.getUniqueId())) {
+                        p.sendMessage("§c[OPPanel Doctor] §eНизкий TPS (" + String.format("%.2f", currentTps) + "). Авто-очищено предметов: " + cleaned);
+                    }
+                }
+            }
+        }, 0L, 100L);
+    }
+
+    public int executeSmartClean() {
+        int count = 0;
+        for (World world : Bukkit.getWorlds()) {
+            for (Item item : world.getEntitiesByClass(Item.class)) {
+                if (!isValuable(item.getItemStack().getType())) {
+                    item.remove();
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    private boolean isValuable(Material type) {
+        String name = type.name();
+        return name.contains("DIAMOND") || name.contains("NETHERITE") ||
+               type == Material.NETHER_STAR || type == Material.TOTEM_OF_UNDYING ||
+               type == Material.ELYTRA || type == Material.ENCHANTED_GOLDEN_APPLE ||
+               type == Material.BEACON || type == Material.SHULKER_BOX;
+    }
+
     // --- 1. ГОЛОВНЕ МЕНЮ ---
     public void openMainMenu(Player player) {
         Inventory gui = Bukkit.createInventory(null, 27, MAIN_TITLE);
@@ -74,23 +149,83 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
 
         double ramUsed = (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / 1024.0 / 1024.0;
         double ramMax = Runtime.getRuntime().maxMemory() / 1024.0 / 1024.0;
-        gui.setItem(12, createGuiItem(Material.NETHER_STAR, "§e§lСтатус Сервера",
-                List.of("§7TPS: §a" + String.format("%.2f", Bukkit.getTPS()[0]),
-                        "§7ОЗУ: §b" + (int) ramUsed + "MB / " + (int) ramMax + "MB",
-                        "§7Онлайн: §f" + Bukkit.getOnlinePlayers().size() + " чел.")));
+        
+        List<String> tpsLore = new ArrayList<>();
+        tpsLore.add("§7Текущий TPS: §a" + String.format("%.2f", Bukkit.getTPS()[0]));
+        tpsLore.add("§7История (последние замеры):");
+        if (tpsHistory.isEmpty()) {
+            tpsLore.add("§8- Сбор данных...");
+        } else {
+            for (double tps : tpsHistory) {
+                String color = tps >= 18 ? "§a" : (tps >= 15 ? "§e" : "§c");
+                tpsLore.add("§8- " + color + String.format("%.2f", tps));
+            }
+        }
+        tpsLore.add("");
+        tpsLore.add("§7ОЗУ: §b" + (int) ramUsed + "MB / " + (int) ramMax + "MB");
+        tpsLore.add("§7Онлайн: §f" + Bukkit.getOnlinePlayers().size() + " чел.");
+        tpsLore.add("§eЛКМ — Меню управления сервером / Доктор");
 
-        gui.setItem(14, createGuiItem(Material.CLOCK, "§b§lВремя и Погода",
-                List.of("§7Выбрать день/ночь,", "§7солнце или дождь/грозу.")));
-
-        gui.setItem(15, createGuiItem(Material.GOLDEN_APPLE, "§2§lСистема Разбана",
-                List.of("§7Управление банами по никам §7и IP-адресам.")));
+        gui.setItem(11, createGuiItem(Material.NETHER_STAR, "§e§lСтатус и Здоровье Сервера", tpsLore));
+        gui.setItem(12, createGuiItem(Material.COMPASS, "§d§lТелепортация по Мирам", List.of("§7Быстрый переход между §7Overworld, Nether и End")));
+        gui.setItem(13, createGuiItem(Material.CLOCK, "§b§lВремя и Погода", List.of("§7Выбрать день/ночь,", "§7солнце или дождь/грозу.")));
+        gui.setItem(14, createGuiItem(Material.GOLDEN_APPLE, "§2§lСистема Разбана", List.of("§7Управление банами по никам §7и IP-адресам.")));
 
         boolean isSpectator = player.getGameMode() == GameMode.SPECTATOR;
-        gui.setItem(16, createGuiItem(Material.ENDER_EYE, "§d§lРежим Спектатора",
-                List.of("§7Статус: " + (isSpectator ? "§aВключен" : "§cВыключен"))));
+        gui.setItem(15, createGuiItem(Material.ENDER_EYE, "§d§lРежим Спектатора", List.of("§7Статус: " + (isSpectator ? "§aВключен" : "§cВыключен"))));
+        gui.setItem(16, createGuiItem(Material.COMPARATOR, "§5§lНастройки OPPanel", List.of("§7Настроить панель под себя," , "§7управление уведомлениями.")));
 
         player.openInventory(gui);
         player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1f);
+    }
+
+    // --- 1.1 МЕНЮ КЕРУВАННЯ СЕРВЕРОМ ТА ТИШЕЮ У ЧАТІ ---
+    public void openServerControlMenu(Player player) {
+        Inventory gui = Bukkit.createInventory(null, 27, SERVER_CONTROL_TITLE);
+        fillBorder(gui);
+
+        gui.setItem(10, createGuiItem(Material.EXPERIENCE_BOTTLE, "§a§lАвто-Диагностика и Чистка",
+                List.of("§7Запустить принудительную проверку", "§7и очистить сервер от лагов и мусора.")));
+
+        gui.setItem(12, createGuiItem(Material.PAPER, "§c§lРежим тишины в чате",
+                List.of("§7Статус: " + (chatMuted ? "§aУКЛЮЧЕН (Только ОП)" : "§cВИКЛЮЧЕН"),
+                        "§7Нажмите, чтобы переключить тишину.")));
+
+        gui.setItem(14, createGuiItem(Material.RECOVERY_COMPASS, "§e§lБезопасный Рестарт",
+                List.of("§7Перезапустить сервер с отсчетом", "§7и предупреждением игроков.")));
+
+        gui.setItem(16, createGuiItem(Material.LAVA_BUCKET, "§4§lВыключить Сервер",
+                List.of("§cВнимание: Полное выключение", "§c(требуется запуск через хостинг).")));
+
+        gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад в главное меню"));
+        player.openInventory(gui);
+    }
+
+    // --- 1.2 МЕНЮ ТЕЛЕПОРТАЦІЇ ПО СВІТАХ ---
+    public void openWorldTpMenu(Player player) {
+        Inventory gui = Bukkit.createInventory(null, 27, WORLD_TP_TITLE);
+        fillBorder(gui);
+
+        gui.setItem(10, createGuiItem(Material.GRASS_BLOCK, "§a§lОверворлд (Главный мир)", List.of("§7Телепортация на спавн §7обычного мира")));
+        gui.setItem(12, createGuiItem(Material.NETHERRACK, "§c§lНезер (Ад)", List.of("§7Телепортация в нижний мир")));
+        gui.setItem(14, createGuiItem(Material.END_STONE, "§e§lЭнд (Край)", List.of("§7Телепортация в измерение дракона")));
+        gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад в главное меню"));
+
+        player.openInventory(gui);
+    }
+
+    // --- 1.3 МЕНЮ НАЛАШТУВАНЬ ПІД СЕБЕ ---
+    public void openSettingsMenu(Player player) {
+        Inventory gui = Bukkit.createInventory(null, 27, SETTINGS_TITLE);
+        fillBorder(gui);
+
+        boolean notifOff = adminNotificationsDisabled.contains(player.getUniqueId());
+        gui.setItem(11, createGuiItem(Material.PAPER, "§e§lУведомления доктора",
+                List.of("§7Статус: " + (notifOff ? "§cВыключены" : "§aВключены"),
+                        "§7Нажмите, чтобы переключить", "§7авто-сообщения о падении TPS.")));
+
+        gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад в главное меню"));
+        player.openInventory(gui);
     }
 
     // --- 2. СПИСОК ОНЛАЙН-ГРАВЦІВ ---
@@ -152,7 +287,6 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         Inventory gui = Bukkit.createInventory(null, 27, DURATION_PREFIX + punishType);
         fillBorder(gui);
 
-        // Виправлено Material.WOODEN_CLOCK на Material.CLOCK
         gui.setItem(10, createGuiItem(Material.CLOCK, "§71 Минута (1m)", List.of("§7Длительность: 60 секунд")));
         gui.setItem(11, createGuiItem(Material.CLOCK, "§e1 Час (1h)", List.of("§7Длительность: 1 час")));
         gui.setItem(13, createGuiItem(Material.PAPER, "§61 День (1d)", List.of("§7Длительность: 24 часа")));
@@ -264,16 +398,83 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
             event.setCancelled(true);
             switch (event.getSlot()) {
                 case 10 -> openPlayerListMenu(player);
-                case 12 -> openMainMenu(player);
-                case 14 -> openWeatherMenu(player);
-                case 15 -> openUnbanTypeMenu(player);
-                case 16 -> {
+                case 11 -> openServerControlMenu(player);
+                case 12 -> openWorldTpMenu(player); // Перехід до телепортації по світах
+                case 13 -> openWeatherMenu(player);
+                case 14 -> openUnbanTypeMenu(player);
+                case 15 -> {
                     if (player.getGameMode() == GameMode.SPECTATOR) player.setGameMode(GameMode.SURVIVAL);
                     else player.setGameMode(GameMode.SPECTATOR);
                     openMainMenu(player);
                 }
+                case 16 -> openSettingsMenu(player);
             }
         } 
+        else if (title.equals(SERVER_CONTROL_TITLE)) {
+            event.setCancelled(true);
+            if (event.getSlot() == 10) {
+                int cleaned = executeSmartClean();
+                player.sendMessage(ChatColor.GREEN + "[OPPanel Doctor] Диагностика завершена! Удалено лишних предметов/сущностей: " + cleaned);
+                player.closeInventory();
+            } else if (event.getSlot() == 12) {
+                chatMuted = !chatMuted;
+                Bukkit.broadcastMessage(chatMuted ? "§c[OPPanel] Администратор включил режим тишины в чате!" : "§a[OPPanel] Режим тишины в чате выключен!");
+                openServerControlMenu(player);
+            } else if (event.getSlot() == 14) {
+                player.sendMessage(ChatColor.RED + "[OPPanel] Запущен безопасный рестарт сервера!");
+                Bukkit.broadcastMessage("§c[Внимание] Сервер перезапускается администратором!");
+                Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), "restart");
+            } else if (event.getSlot() == 16) {
+                player.sendMessage(ChatColor.DARK_RED + "[OPPanel] Сервер выключается!");
+                Bukkit.shutdown();
+            } else if (event.getSlot() == 22) {
+                openMainMenu(player);
+            }
+        }
+        else if (title.equals(WORLD_TP_TITLE)) {
+            event.setCancelled(true);
+            if (event.getSlot() == 10) {
+                World overworld = Bukkit.getWorlds().get(0);
+                player.teleport(overworld.getSpawnLocation());
+                player.sendMessage(ChatColor.GREEN + "[OPPanel] Телепортация в Оверворлд успішна!");
+                player.closeInventory();
+            } else if (event.getSlot() == 12) {
+                World nether = Bukkit.getWorld("world_nether");
+                if (nether != null) {
+                    player.teleport(nether.getSpawnLocation());
+                    player.sendMessage(ChatColor.GREEN + "[OPPanel] Телепортация в Незер успішна!");
+                } else {
+                    player.sendMessage(ChatColor.RED + "[OPPanel] Мир Незера не найден!");
+                }
+                player.closeInventory();
+            } else if (event.getSlot() == 14) {
+                World theEnd = Bukkit.getWorld("world_the_end");
+                if (theEnd != null) {
+                    player.teleport(theEnd.getSpawnLocation());
+                    player.sendMessage(ChatColor.GREEN + "[OPPanel] Телепортация в Энд успішна!");
+                } else {
+                    player.sendMessage(ChatColor.RED + "[OPPanel] Мир Энда не найден!");
+                }
+                player.closeInventory();
+            } else if (event.getSlot() == 22) {
+                openMainMenu(player);
+            }
+        }
+        else if (title.equals(SETTINGS_TITLE)) {
+            event.setCancelled(true);
+            if (event.getSlot() == 11) {
+                if (adminNotificationsDisabled.contains(player.getUniqueId())) {
+                    adminNotificationsDisabled.remove(player.getUniqueId());
+                    player.sendMessage(ChatColor.GREEN + "[OPPanel] Авто-уведомления доктора включены.");
+                } else {
+                    adminNotificationsDisabled.add(player.getUniqueId());
+                    player.sendMessage(ChatColor.YELLOW + "[OPPanel] Авто-уведомления доктора выключены.");
+                }
+                openSettingsMenu(player);
+            } else if (event.getSlot() == 22) {
+                openMainMenu(player);
+            }
+        }
         else if (title.equals(UNBAN_TYPE_TITLE)) {
             event.setCancelled(true);
             if (event.getSlot() == 11) openUnbanNameMenu(player);
