@@ -33,7 +33,7 @@ import java.util.*;
 
 public final class OPPanel extends JavaPlugin implements Listener, CommandExecutor {
 
-    private final String DESKTOP_TITLE = "§8» §4§lOPPanel v6.1 §7| Главное Меню";
+    private final String DESKTOP_TITLE = "§8» §4§lOPPanel v6.2 §7| Главное Меню";
     
     private final String FOLDER_PLAYERS = "§8[Категория] §a§lУправление Игроками";
     private final String FOLDER_SERVER = "§8[Категория] §4§lУправление Сервером";
@@ -42,7 +42,6 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
     private final String FOLDER_SETTINGS = "§8[Категория] §5§lНастройки и Свойства";
     
     private final String SUBFOLDER_PLUGINS = "§8[Папка] §3§lАктивные Плагины";
-    private final String SUBFOLDER_WORLD_FILES = "§8[Папка] §6§lПравила Мира (Gamerules)";
     private final String SUBFOLDER_ADMIN_TOOLS = "§8[Папка] §9§lИнструменты Админа";
 
     private final String PLAYERS_LIST = "§8» §c§lВыбор Игрока";
@@ -73,7 +72,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         }
 
         startServerDoctorTask();
-        getLogger().info("OPPanel v6.1 успешно загружен!");
+        getLogger().info("OPPanel v6.2 успешно загружен!");
     }
 
     @Override
@@ -263,8 +262,8 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         gui.setItem(10, createGuiItem(Material.PLAYER_HEAD, FOLDER_PLAYERS, List.of("§7Список онлайн-игроков,", "§7телепортация, баны, заморозка.")));
         gui.setItem(11, createGuiItem(Material.REDSTONE_BLOCK, FOLDER_SERVER, List.of("§7Рестарт, выключение, техобслуживание,", "§7управление глобальным чатом.")));
         gui.setItem(12, createGuiItem(Material.EXPERIENCE_BOTTLE, FOLDER_ANTILAG, List.of("§7Мониторинг TPS, история замера,", "§7ручная мега-очистка мусора.")));
-        gui.setItem(13, createGuiItem(Material.GRASS_BLOCK, FOLDER_WORLDS, List.of("§7Телепорт по измерениям,", "§7настройка правил мира.")));
-        gui.setItem(15, createGuiItem(Material.CHEST, FOLDER_SETTINGS, List.of("§7Дополнительные разделы:", "§7- Активные плагины", "§7- Правила мира (Gamerules)", "§7- Инструменты админа")));
+        gui.setItem(13, createGuiItem(Material.GRASS_BLOCK, FOLDER_WORLDS, List.of("§7Телепорт по измерениям,", "§7быстрый переход в Незер/Энд.")));
+        gui.setItem(15, createGuiItem(Material.CHEST, FOLDER_SETTINGS, List.of("§7Дополнительные разделы:", "§7- Активные плагины", "§7- Время и погода", "§7- Инструменты админа")));
 
         player.openInventory(gui);
         player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1f);
@@ -276,7 +275,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         fillBorder(gui);
 
         gui.setItem(11, createGuiItem(Material.BOOKSHELF, SUBFOLDER_PLUGINS, List.of("§7Просмотр активированных плагинов,", "§7версия ядра и состояние памяти.")));
-        gui.setItem(13, createGuiItem(Material.KNOWLEDGE_BOOK, SUBFOLDER_WORLD_FILES, List.of("§7Управление мирами,", "§7погода, время и Gamerules.")));
+        gui.setItem(13, createGuiItem(Material.CLOCK, WEATHER_TITLE, List.of("§7Управление временем суток", "§7и погодными условиями.")));
         gui.setItem(15, createGuiItem(Material.NETHERITE_INGOT, SUBFOLDER_ADMIN_TOOLS, List.of("§7Godmode, Vanish, Режимы игры,", "§7получение Жезла администратора.")));
         gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад в Главное меню"));
 
@@ -300,27 +299,6 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
 
         gui.setItem(13, createGuiItem(Material.ENDER_CHEST, "§b§lСписок активных плагинов", pluginLore));
         gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад в Настройки"));
-        player.openInventory(gui);
-    }
-
-    public void openWorldFilesSubfolder(Player player) {
-        if (!hasAccess(player)) return;
-        Inventory gui = Bukkit.createInventory(null, 27, SUBFOLDER_WORLD_FILES);
-        fillBorder(gui);
-
-        World w = player.getWorld();
-        boolean keepInv = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.KEEP_INVENTORY));
-        boolean mobGrief = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.MOB_GRIEFING));
-        boolean fireTick = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.DO_FIRE_TICK));
-        boolean tntExplode = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.TNT));
-
-        gui.setItem(10, createGuiItem(Material.CLOCK, "§b§lВремя и Погода", List.of("§7Управление днем, ночью и дождем")));
-        gui.setItem(12, createGuiItem(Material.TOTEM_OF_UNDYING, "§e§lKeepInventory: " + (keepInv ? "§aВКЛ" : "§cВЫКЛ")));
-        gui.setItem(13, createGuiItem(Material.CREEPER_HEAD, "§a§lMobGriefing: " + (mobGrief ? "§aВКЛ" : "§cВЫКЛ")));
-        gui.setItem(14, createGuiItem(Material.FLINT_AND_STEEL, "§6§lFireTick: " + (fireTick ? "§aВКЛ" : "§cВЫКЛ")));
-        gui.setItem(15, createGuiItem(Material.TNT, "§c§lTNT Explodes: " + (tntExplode ? "§aВКЛ" : "§cВЫКЛ")));
-        gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад в Настройки"));
-
         player.openInventory(gui);
     }
 
@@ -481,24 +459,13 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
             event.setCancelled(true);
             switch (event.getSlot()) {
                 case 11 -> openPluginsSubfolder(player);
-                case 13 -> openWorldFilesSubfolder(player);
+                case 13 -> openWeatherMenu(player);
                 case 15 -> openAdminToolsSubfolder(player);
                 case 22 -> openDesktop(player);
             }
         } else if (title.equals(SUBFOLDER_PLUGINS)) {
             event.setCancelled(true);
             if (event.getSlot() == 22) openSettingsFolder(player);
-        } else if (title.equals(SUBFOLDER_WORLD_FILES)) {
-            event.setCancelled(true);
-            World w = player.getWorld();
-            switch (event.getSlot()) {
-                case 10 -> openWeatherMenu(player);
-                case 12 -> { boolean c = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.KEEP_INVENTORY)); w.setGameRule(GameRule.KEEP_INVENTORY, !c); openWorldFilesSubfolder(player); }
-                case 13 -> { boolean c = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.MOB_GRIEFING)); w.setGameRule(GameRule.MOB_GRIEFING, !c); openWorldFilesSubfolder(player); }
-                case 14 -> { boolean c = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.DO_FIRE_TICK)); w.setGameRule(GameRule.DO_FIRE_TICK, !c); openWorldFilesSubfolder(player); }
-                case 15 -> { boolean c = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.TNT)); w.setGameRule(GameRule.TNT, !c); openWorldFilesSubfolder(player); }
-                case 22 -> openSettingsFolder(player);
-            }
         } else if (title.equals(SUBFOLDER_ADMIN_TOOLS)) {
             event.setCancelled(true);
             switch (event.getSlot()) {
@@ -584,7 +551,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                 case 12 -> w.setTime(13000);
                 case 14 -> { w.setStorm(false); w.setThundering(false); }
                 case 16 -> w.setStorm(true);
-                case 22 -> openWorldFilesSubfolder(player);
+                case 22 -> openSettingsFolder(player);
             }
         } else if (title.equals(PLAYERS_LIST)) {
             event.setCancelled(true);
