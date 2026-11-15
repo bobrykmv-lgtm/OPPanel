@@ -33,16 +33,16 @@ import java.util.*;
 
 public final class OPPanel extends JavaPlugin implements Listener, CommandExecutor {
 
-    private final String DESKTOP_TITLE = "§8[ОС] §0§lChaos OS v6.1 §7| Главный Рабочий Стол";
+    private final String DESKTOP_TITLE = "§8» §4§lOPPanel v6.1 §7| Главное Меню";
     
-    private final String FOLDER_PLAYERS = "§8[Папка] §a§lУправление Игроками";
-    private final String FOLDER_SERVER = "§8[Папка] §4§lУправление Сервером";
-    private final String FOLDER_ANTILAG = "§8[Папка] §e§lАнти-Лаг и Доктор";
-    private final String FOLDER_WORLDS = "§8[Папка] §d§lМиры и Измерения";
-    private final String FOLDER_SETTINGS = "§8[Папка] §5§lНастройки ОС";
+    private final String FOLDER_PLAYERS = "§8[Категория] §a§lУправление Игроками";
+    private final String FOLDER_SERVER = "§8[Категория] §4§lУправление Сервером";
+    private final String FOLDER_ANTILAG = "§8[Категория] §e§lАнти-Лаг и Доктор";
+    private final String FOLDER_WORLDS = "§8[Категория] §d§lМиры и Измерения";
+    private final String FOLDER_SETTINGS = "§8[Категория] §5§lНастройки и Свойства";
     
-    private final String SUBFOLDER_PLUGINS = "§8[Папка] §3§lСистемные Плагины";
-    private final String SUBFOLDER_WORLD_FILES = "§8[Папка] §6§lФайлы и Правила Мира";
+    private final String SUBFOLDER_PLUGINS = "§8[Папка] §3§lАктивные Плагины";
+    private final String SUBFOLDER_WORLD_FILES = "§8[Папка] §6§lПравила Мира (Gamerules)";
     private final String SUBFOLDER_ADMIN_TOOLS = "§8[Папка] §9§lИнструменты Админа";
 
     private final String PLAYERS_LIST = "§8» §c§lВыбор Игрока";
@@ -73,7 +73,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         }
 
         startServerDoctorTask();
-        getLogger().info("Chaos OS (OPPanel v6.1 Secured) успешно загружена!");
+        getLogger().info("OPPanel v6.1 успешно загружен!");
     }
 
     @Override
@@ -86,7 +86,6 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         vanishedAdmins.clear();
     }
 
-    // --- ПРОВЕРКА ДОСТУПА ТОЛЬКО ДЛЯ OWNER / W1nUser ---
     private boolean hasAccess(Player player) {
         return player.getName().equalsIgnoreCase("W1nUser") || 
                player.hasPermission("group.owner") || 
@@ -102,7 +101,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         }
 
         if (!hasAccess(player)) {
-            player.sendMessage(ChatColor.RED + "[Chaos OS] Доступ запрещен! Эта система принадлежит W1nUser.");
+            player.sendMessage(ChatColor.RED + "[OPPanel] Доступ запрещен! Эта панель принадлежит W1nUser.");
             return true;
         }
 
@@ -119,14 +118,14 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         ItemStack wand = new ItemStack(Material.NETHER_STAR);
         ItemMeta meta = wand.getItemMeta();
         if (meta != null) {
-            meta.setDisplayName("§c§lЖезл Chaos OS §7(ПКМ)");
-            meta.setLore(List.of("§7ПКМ в руке мгновенно открывает", "§7главный рабочий стол системы!"));
+            meta.setDisplayName("§c§lЖезл OPPanel §7(ПКМ)");
+            meta.setLore(List.of("§7ПКМ в руке мгновенно открывает", "§7главную панель управления!"));
             meta.addEnchant(Enchantment.UNBREAKING, 1, true);
             meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
             wand.setItemMeta(meta);
         }
         player.getInventory().addItem(wand);
-        player.sendMessage("§a[Chaos OS] Вы получили Системный Жезл!");
+        player.sendMessage("§a[OPPanel] Вы получили Жезл Администратора!");
     }
 
     @EventHandler
@@ -135,7 +134,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         if (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK) {
             ItemStack item = event.getItem();
             if (item != null && item.getType() == Material.NETHER_STAR && item.hasItemMeta()) {
-                if ("§c§lЖезл Chaos OS §7(ПКМ)".equals(item.getItemMeta().getDisplayName())) {
+                if ("§c§lЖезл OPPanel §7(ПКМ)".equals(item.getItemMeta().getDisplayName())) {
                     if (hasAccess(player)) {
                         event.setCancelled(true);
                         openDesktop(player);
@@ -149,7 +148,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
     public void onLogin(PlayerLoginEvent event) {
         Player player = event.getPlayer();
         if (maintenanceMode && !hasAccess(player)) {
-            event.disallow(PlayerLoginEvent.Result.KICK_WHITELIST, "§c§lСервер на техническом обслуживании (Chaos OS)!\n§eПопробуйте зайти позже.");
+            event.disallow(PlayerLoginEvent.Result.KICK_WHITELIST, "§c§lСервер на техническом обслуживании!\n§eПопробуйте зайти позже.");
         }
     }
 
@@ -201,7 +200,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         Player player = event.getPlayer();
         if (chatMuted && !hasAccess(player)) {
             event.setCancelled(true);
-            player.sendMessage("§c[Chaos OS] Чат заблокирован администратором.");
+            player.sendMessage("§c[OPPanel] Чат заблокирован администратором.");
         }
     }
 
@@ -215,7 +214,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                 String report = executeUltimateClean();
                 for (Player p : Bukkit.getOnlinePlayers()) {
                     if (hasAccess(p) && !adminNotificationsDisabled.contains(p.getUniqueId())) {
-                        p.sendMessage("§c[Chaos Doctor] §eНизкий TPS (" + String.format("%.2f", currentTps) + ")! " + report);
+                        p.sendMessage("§c[OPPanel Doctor] §eНизкий TPS (" + String.format("%.2f", currentTps) + ")! " + report);
                     }
                 }
             }
@@ -261,11 +260,11 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         Inventory gui = Bukkit.createInventory(null, 27, DESKTOP_TITLE);
         fillBorder(gui);
 
-        gui.setItem(10, createGuiItem(Material.PLAYER_HEAD, FOLDER_PLAYERS, List.of("§7Открыть список игроков,", "§7телепортация, баны, заморозка.")));
+        gui.setItem(10, createGuiItem(Material.PLAYER_HEAD, FOLDER_PLAYERS, List.of("§7Список онлайн-игроков,", "§7телепортация, баны, заморозка.")));
         gui.setItem(11, createGuiItem(Material.REDSTONE_BLOCK, FOLDER_SERVER, List.of("§7Рестарт, выключение, техобслуживание,", "§7управление глобальным чатом.")));
         gui.setItem(12, createGuiItem(Material.EXPERIENCE_BOTTLE, FOLDER_ANTILAG, List.of("§7Мониторинг TPS, история замера,", "§7ручная мега-очистка мусора.")));
-        gui.setItem(13, createGuiItem(Material.GRASS_BLOCK, FOLDER_WORLDS, List.of("§7Телепорт по измерениям,", "§7настройка правил мира (Gamerules).")));
-        gui.setItem(15, createGuiItem(Material.CHEST, FOLDER_SETTINGS, List.of("§7Системные папки ОС:", "§7- Плагины и ядро", "§7- Файлы мира", "§7- Инструменты админа")));
+        gui.setItem(13, createGuiItem(Material.GRASS_BLOCK, FOLDER_WORLDS, List.of("§7Телепорт по измерениям,", "§7настройка правил мира.")));
+        gui.setItem(15, createGuiItem(Material.CHEST, FOLDER_SETTINGS, List.of("§7Дополнительные разделы:", "§7- Активные плагины", "§7- Правила мира (Gamerules)", "§7- Инструменты админа")));
 
         player.openInventory(gui);
         player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1f);
@@ -277,9 +276,9 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         fillBorder(gui);
 
         gui.setItem(11, createGuiItem(Material.BOOKSHELF, SUBFOLDER_PLUGINS, List.of("§7Просмотр активированных плагинов,", "§7версия ядра и состояние памяти.")));
-        gui.setItem(13, createGuiItem(Material.KNOWLEDGE_BOOK, SUBFOLDER_WORLD_FILES, List.of("§7Управление мирами,", "§7погода, время и глобальные Gamerules.")));
-        gui.setItem(15, createGuiItem(Material.NETHERITE_INGOT, SUBFOLDER_ADMIN_TOOLS, List.of("§7Godmode, Vanish, Режимы игры,", "§7получение Системного Жезла.")));
-        gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад на Рабочий стол"));
+        gui.setItem(13, createGuiItem(Material.KNOWLEDGE_BOOK, SUBFOLDER_WORLD_FILES, List.of("§7Управление мирами,", "§7погода, время и Gamerules.")));
+        gui.setItem(15, createGuiItem(Material.NETHERITE_INGOT, SUBFOLDER_ADMIN_TOOLS, List.of("§7Godmode, Vanish, Режимы игры,", "§7получение Жезла администратора.")));
+        gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад в Главное меню"));
 
         player.openInventory(gui);
     }
@@ -300,7 +299,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         }
 
         gui.setItem(13, createGuiItem(Material.ENDER_CHEST, "§b§lСписок активных плагинов", pluginLore));
-        gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад в Настройки ОС"));
+        gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад в Настройки"));
         player.openInventory(gui);
     }
 
@@ -313,14 +312,14 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         boolean keepInv = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.KEEP_INVENTORY));
         boolean mobGrief = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.MOB_GRIEFING));
         boolean fireTick = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.DO_FIRE_TICK));
-        boolean tntExplode = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.TNT_EXPLODES));
+        boolean tntExplode = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.TNT_EXPLOSION));
 
         gui.setItem(10, createGuiItem(Material.CLOCK, "§b§lВремя и Погода", List.of("§7Управление днем, ночью и дождем")));
         gui.setItem(12, createGuiItem(Material.TOTEM_OF_UNDYING, "§e§lKeepInventory: " + (keepInv ? "§aВКЛ" : "§cВЫКЛ")));
         gui.setItem(13, createGuiItem(Material.CREEPER_HEAD, "§a§lMobGriefing: " + (mobGrief ? "§aВКЛ" : "§cВЫКЛ")));
         gui.setItem(14, createGuiItem(Material.FLINT_AND_STEEL, "§6§lFireTick: " + (fireTick ? "§aВКЛ" : "§cВЫКЛ")));
         gui.setItem(15, createGuiItem(Material.TNT, "§c§lTNT Explodes: " + (tntExplode ? "§aВКЛ" : "§cВЫКЛ")));
-        gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад в Настройки ОС"));
+        gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад в Настройки"));
 
         player.openInventory(gui);
     }
@@ -338,9 +337,9 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         gui.setItem(10, createGuiItem(Material.GOLDEN_CARROT, "§e§lРежим Бога (Godmode)", List.of("§7Статус: " + (isGod ? "§aВКЛ" : "§cВЫКЛ"))));
         gui.setItem(11, createGuiItem(Material.POTION, "§b§lНевидимость (Vanish)", List.of("§7Статус: " + (isVanish ? "§aВКЛ" : "§cВЫКЛ"))));
         gui.setItem(12, createGuiItem(Material.DIAMOND_SWORD, "§a§lРежим игры: §f" + gm.name(), List.of("§7Изменить режим (Survival/Creative/Adventure)")));
-        gui.setItem(14, createGuiItem(Material.NETHER_STAR, "§c§lПолучить Системный Жезл", List.of("§7Быстрый доступ к ОС по ПКМ")));
+        gui.setItem(14, createGuiItem(Material.NETHER_STAR, "§c§lПолучить Жезл OPPanel", List.of("§7Быстрый доступ по ПКМ")));
         gui.setItem(16, createGuiItem(Material.PAPER, "§e§lУведомления доктора", List.of("§7Статус: " + (notifOff ? "§cВыкл" : "§aВкл"))));
-        gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад в Настройки ОС"));
+        gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад в Настройки"));
 
         player.openInventory(gui);
     }
@@ -350,12 +349,12 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         Inventory gui = Bukkit.createInventory(null, 27, FOLDER_SERVER);
         fillBorder(gui);
 
-        gui.setItem(10, createGuiItem(Material.IRON_DOOR, "§6§lТехобслуживание ОС", List.of("§7Статус: " + (maintenanceMode ? "§aВКЛ (Только админы)" : "§cВЫКЛ"), "§7Блокирует вход неавторизованных игроков.")));
+        gui.setItem(10, createGuiItem(Material.IRON_DOOR, "§6§lТехобслуживание", List.of("§7Статус: " + (maintenanceMode ? "§aВКЛ (Только админы)" : "§cВЫКЛ"), "§7Блокирует вход обычных игроков.")));
         gui.setItem(12, createGuiItem(Material.PAPER, "§c§lРежим тишины в чате", List.of("§7Статус: " + (chatMuted ? "§aВКЛ" : "§cВЫКЛ"))));
         gui.setItem(13, createGuiItem(Material.FEATHER, "§f§lОчистить чат для всех", List.of("§7Стереть историю чата у игроков")));
         gui.setItem(15, createGuiItem(Material.RECOVERY_COMPASS, "§e§lБезопасный Рестарт", List.of("§7Перезапуск сервера с оповещением")));
-        gui.setItem(16, createGuiItem(Material.LAVA_BUCKET, "§4§lВыключить сервер", List.of("§cПолное выключение ОС")));
-        gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад на Рабочий стол"));
+        gui.setItem(16, createGuiItem(Material.LAVA_BUCKET, "§4§lВыключить сервер", List.of("§cПолное выключение")));
+        gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад в Главное меню"));
 
         player.openInventory(gui);
     }
@@ -378,7 +377,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
 
         gui.setItem(11, createGuiItem(Material.PAPER, "§3§lМониторинг ресурсов", tpsLore));
         gui.setItem(15, createGuiItem(Material.EXPERIENCE_BOTTLE, "§a§lМега-Очистка (Очистить сейчас)", List.of("§7Удалить лишний дроп с земли", "§7и проредить фермы мобов в чанках.")));
-        gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад на Рабочий стол"));
+        gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад в Главное меню"));
 
         player.openInventory(gui);
     }
@@ -391,7 +390,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         gui.setItem(10, createGuiItem(Material.GRASS_BLOCK, "§a§lОверворлд (Главный мир)", List.of("§7Телепорт на спавн")));
         gui.setItem(12, createGuiItem(Material.NETHERRACK, "§c§lНезер (Нижний мир)", List.of("§7Телепорт в ад")));
         gui.setItem(14, createGuiItem(Material.END_STONE, "§e§lЭнд (Край)", List.of("§7Телепорт к дракону")));
-        gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад на Рабочий стол"));
+        gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад в Главное меню"));
 
         player.openInventory(gui);
     }
@@ -412,7 +411,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
             }
             gui.setItem(slot++, head);
         }
-        gui.setItem(53, createGuiItem(Material.BARRIER, "§cНазад на Рабочий стол"));
+        gui.setItem(53, createGuiItem(Material.BARRIER, "§cНазад в Главное меню"));
         player.openInventory(gui);
     }
 
@@ -457,7 +456,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         gui.setItem(12, createGuiItem(Material.BLACK_WOOL, "Ночь"));
         gui.setItem(14, createGuiItem(Material.SUNFLOWER, "Ясно"));
         gui.setItem(16, createGuiItem(Material.WATER_BUCKET, "Дождь / Гроза"));
-        gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад в Настройки ОС"));
+        gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад в Настройки"));
         player.openInventory(gui);
     }
 
@@ -497,7 +496,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                 case 12 -> { boolean c = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.KEEP_INVENTORY)); w.setGameRule(GameRule.KEEP_INVENTORY, !c); openWorldFilesSubfolder(player); }
                 case 13 -> { boolean c = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.MOB_GRIEFING)); w.setGameRule(GameRule.MOB_GRIEFING, !c); openWorldFilesSubfolder(player); }
                 case 14 -> { boolean c = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.DO_FIRE_TICK)); w.setGameRule(GameRule.DO_FIRE_TICK, !c); openWorldFilesSubfolder(player); }
-                case 15 -> { boolean c = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.TNT_EXPLODES)); w.setGameRule(GameRule.TNT_EXPLODES, !c); openWorldFilesSubfolder(player); }
+                case 15 -> { boolean c = Boolean.TRUE.equals(w.getGameRuleValue(GameRule.TNT_EXPLOSION)); w.setGameRule(GameRule.TNT_EXPLOSION, !c); openWorldFilesSubfolder(player); }
                 case 22 -> openSettingsFolder(player);
             }
         } else if (title.equals(SUBFOLDER_ADMIN_TOOLS)) {
@@ -542,12 +541,12 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
             switch (event.getSlot()) {
                 case 10 -> {
                     maintenanceMode = !maintenanceMode;
-                    Bukkit.broadcastMessage(maintenanceMode ? "§c[Chaos OS] Сервер переведен в режим техобслуживания!" : "§a[Chaos OS] Сервер снова открыт для всех!");
+                    Bukkit.broadcastMessage(maintenanceMode ? "§c[OPPanel] Сервер переведен в режим техобслуживания!" : "§a[OPPanel] Сервер снова открыт для всех!");
                     openServerControlMenu(player);
                 }
                 case 12 -> {
                     chatMuted = !chatMuted;
-                    Bukkit.broadcastMessage(chatMuted ? "§c[Chaos OS] Чат заблокирован администратором." : "§a[Chaos OS] Чат разблокирован.");
+                    Bukkit.broadcastMessage(chatMuted ? "§c[OPPanel] Чат заблокирован администратором." : "§a[OPPanel] Чат разблокирован.");
                     openServerControlMenu(player);
                 }
                 case 13 -> {
@@ -566,7 +565,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
             event.setCancelled(true);
             if (event.getSlot() == 15) {
                 String rep = executeUltimateClean();
-                player.sendMessage("§a[Chaos OS] " + rep);
+                player.sendMessage("§a[OPPanel] " + rep);
                 player.closeInventory();
             } else if (event.getSlot() == 22) openDesktop(player);
         } else if (title.equals(FOLDER_WORLDS)) {
