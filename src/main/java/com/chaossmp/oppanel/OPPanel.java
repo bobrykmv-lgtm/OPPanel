@@ -38,6 +38,10 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
             "yml", "yaml", "json", "properties", "txt", "log", "toml", "conf", "cfg", "sk"
     );
 
+    private static final Set<String> HIDDEN_WORLD_FOLDERS = Set.of(
+            "world", "world_nether", "world_the_end"
+    );
+
     private final String DESKTOP_TITLE = "§8» §4§lOPPanel v7.0 §7| Рабочий Стол";
 
     private final String FOLDER_PLAYERS = "§8[Модуль] §a§lУправление Игроками";
@@ -262,10 +266,6 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         }, 100L, 100L);
     }
 
-    /**
-     * Проста оптимізація: прибирає звичайні предмети на землі (крім цінних)
-     * та надлишок неіменованих мобів понад mobChunkCap у завантажених чанках.
-     */
     public String executeSmartDoctor(double currentTps) {
         int itemsRemoved = 0;
         int mobsRemoved = 0;
@@ -307,6 +307,10 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                 type == Material.NETHER_STAR || type == Material.TOTEM_OF_UNDYING ||
                 type == Material.ELYTRA || type == Material.ENCHANTED_GOLDEN_APPLE ||
                 type == Material.BEACON || type == Material.SHULKER_BOX;
+    }
+
+    private boolean isHiddenWorldFolder(File file) {
+        return file.isDirectory() && HIDDEN_WORLD_FOLDERS.contains(file.getName().toLowerCase(Locale.ROOT));
     }
 
     private File getServerRoot() {
@@ -455,7 +459,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
 
     public void openFilesFolder(Player player, File dir) {
         if (!hasAccess(player)) return;
-        if (dir == null || !dir.exists() || !dir.isDirectory() || !isInsideServerRoot(dir)) {
+        if (dir == null || !dir.exists() || !dir.isDirectory() || !isInsideServerRoot(dir) || isHiddenWorldFolder(dir)) {
             dir = getServerRoot();
         }
         currentBrowseDir.put(player.getUniqueId(), dir);
@@ -468,6 +472,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
             Arrays.sort(entries, Comparator.comparing(File::isDirectory).reversed().thenComparing(File::getName));
             for (File f : entries) {
                 if (slot >= 45) break;
+                if (isHiddenWorldFolder(f)) continue;
                 Material mat = f.isDirectory() ? Material.CHEST : Material.PAPER;
                 String prefix = f.isDirectory() ? "§6[Папка] §e" : "§f[Файл] §7";
                 long sizeKb = f.isFile() ? f.length() / 1024 : 0;
@@ -479,7 +484,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         }
 
         File parent = dir.getParentFile();
-        if (parent != null && isInsideServerRoot(parent)) {
+        if (parent != null && isInsideServerRoot(parent) && !isHiddenWorldFolder(parent)) {
             gui.setItem(45, createGuiItem(Material.ARROW, "§eВверх: §7" + parent.getName()));
         }
         gui.setItem(49, createGuiItem(Material.MAP, "§aПуть: §f" + dir.getName(), List.of("§7" + dir.getAbsolutePath())));
@@ -777,7 +782,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
             }
             if (slot == 45) {
                 File parent = currentDir.getParentFile();
-                if (parent != null && isInsideServerRoot(parent)) {
+                if (parent != null && isInsideServerRoot(parent) && !isHiddenWorldFolder(parent)) {
                     openFilesFolder(player, parent);
                 }
                 return;
@@ -788,7 +793,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                 String rawName = ChatColor.stripColor(clicked.getItemMeta().getDisplayName());
                 String targetName = rawName.replaceFirst("^\\[Папка\\]\\s*", "").replaceFirst("^\\[Файл\\]\\s*", "");
                 File target = new File(currentDir, targetName);
-                if (!isInsideServerRoot(target) || !target.exists()) {
+                if (!isInsideServerRoot(target) || !target.exists() || isHiddenWorldFolder(target)) {
                     player.sendMessage("§c[OPPanel] Путь недоступен.");
                     return;
                 }
