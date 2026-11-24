@@ -34,6 +34,10 @@ import java.util.*;
 
 public final class OPPanel extends JavaPlugin implements Listener, CommandExecutor {
 
+    private static final Set<String> READABLE_EXTENSIONS = Set.of(
+            "yml", "yaml", "json", "properties", "txt", "log", "toml", "conf", "cfg", "sk"
+    );
+
     private final String DESKTOP_TITLE = "§8» §4§lOPPanel v7.0 §7| Рабочий Стол";
 
     private final String FOLDER_PLAYERS = "§8[Модуль] §a§lУправление Игроками";
@@ -247,7 +251,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
 
             if (!autoDoctorEnabled) return;
 
-            if (currentTps < 1.0 || currentTps < doctorTpsThreshold) {
+            if (currentTps < doctorTpsThreshold) {
                 String report = executeSmartDoctor(currentTps);
                 for (Player p : Bukkit.getOnlinePlayers()) {
                     if (hasAccess(p) && !adminNotificationsDisabled.contains(p.getUniqueId())) {
@@ -259,51 +263,33 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
     }
 
     /**
-     * Якщо TPS < 1.0 (наприклад, 0.43) — критична очистка: видаляє ВСІХ мобів крім гравців
-     * та ВСІ предмети на землі.
-     * Якщо TPS >= 1.0 — проста оптимізація: чистить зайві предмети й надлишок мобів.
+     * Проста оптимізація: прибирає звичайні предмети на землі (крім цінних)
+     * та надлишок неіменованих мобів понад mobChunkCap у завантажених чанках.
      */
     public String executeSmartDoctor(double currentTps) {
         int itemsRemoved = 0;
         int mobsRemoved = 0;
-        boolean criticalMode = currentTps < 1.0;
 
         for (World world : Bukkit.getWorlds()) {
             for (Item item : world.getEntitiesByClass(Item.class)) {
-                if (criticalMode || !isValuable(item.getItemStack().getType())) {
+                if (!isValuable(item.getItemStack().getType())) {
                     item.remove();
                     itemsRemoved++;
                 }
             }
 
-            if (criticalMode) {
-                for (LivingEntity living : world.getLivingEntities()) {
-                    if (!(living instanceof Player)) {
-                        living.remove();
-                        mobsRemoved++;
-                    }
-                }
-            } else {
-                for (Chunk chunk : world.getLoadedChunks()) {
-                    int livingCount = 0;
-                    for (Entity entity : chunk.getEntities()) {
-                        if (entity instanceof LivingEntity && !(entity instanceof Player)) {
-                            livingCount++;
-                            if (livingCount > mobChunkCap && entity.getCustomName() == null) {
-                                entity.remove();
-                                mobsRemoved++;
-                            }
+            for (Chunk chunk : world.getLoadedChunks()) {
+                int livingCount = 0;
+                for (Entity entity : chunk.getEntities()) {
+                    if (entity instanceof LivingEntity && !(entity instanceof Player)) {
+                        livingCount++;
+                        if (livingCount > mobChunkCap && entity.getCustomName() == null) {
+                            entity.remove();
+                            mobsRemoved++;
                         }
                     }
                 }
             }
-        }
-
-        if (criticalMode) {
-            System.gc();
-            return "§4§l[OPPanel Doctor КРИТИЧ] §cTPS " + String.format("%.2f", currentTps) +
-                    " < 1.0! §7Удалены ВСЕ мобы (кроме игроков): §e" + mobsRemoved +
-                    "§7, все предметы: §e" + itemsRemoved + " §7+ вызван GC.";
         }
 
         return "§e[OPPanel Doctor] §7TPS: §a" + String.format("%.2f", currentTps) +
@@ -324,16 +310,57 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
     }
 
     private File getServerRoot() {
-        return getDataFolder().getParentFile().getParentFile();
+        File dataFolder = getDataFolder().getAbsoluteFile();
+        File pluginsDir = dataFolder.getParentFile();
+        if (pluginsDir != null && pluginsDir.getParentFile() != null) {
+            return pluginsDir.getParentFile();
+        }
+        return new File(".").getAbsoluteFile();
     }
 
     private boolean isInsideServerRoot(File target) {
         try {
-            Path root = getServerRoot().toPath().toRealPath();
-            Path check = target.toPath().toRealPath();
+            Path root = getServerRoot().toPath().normalize().toAbsolutePath();
+            Path check = target.toPath().normalize().toAbsolutePath();
             return check.startsWith(root);
-        } catch (IOException e) {
+        } catch (Exception e) {
             return false;
+        }
+    }
+
+    private String getExtension(String fileName) {
+        int dot = fileName.lastIndexOf('.');
+        if (dot < 0 || dot == fileName.length() - 1) return "";
+        return fileName.substring(dot + 1).toLowerCase(Locale.ROOT);
+    }
+
+    private void inspectFile(Player player, File file) {
+        if (!file.exists() || !file.isFile() || !isInsideServerRoot(file)) {
+            player.sendMessage("§c[OPPanel] Файл недоступен или не найден.");
+            return;
+        }
+
+        String ext = getExtension(file.getName());
+        if (!READABLE_EXTENSIONS.contains(ext) && file.length() > 65536) {
+            player.sendMessage("§e[OPPanel] Файл §f" + file.getName() + " §eслишком большой (" + (file.length() / 1024) + " KB) для чтения в чате.");
+            return;
+        }
+
+        try {
+            List<String> lines = Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
+            int start = Math.max(0, lines.size() - 15);
+            player.sendMessage("§6§m--------------------------------");
+            player.sendMessage("§6Файл: §f" + file.getName() + " §7(строк: " + lines.size() + ")");
+            for (int i = start; i < lines.size(); i++) {
+                String line = lines.get(i);
+                if (line.length() > 140) {
+                    line = line.substring(0, 140) + "...";
+                }
+                player.sendMessage("§7" + line);
+            }
+            player.sendMessage("§6§m--------------------------------");
+        } catch (IOException | RuntimeException e) {
+            player.sendMessage("§c[OPPanel] Не удалось прочитать файл §f" + file.getName() + "§c: " + e.getMessage());
         }
     }
 
@@ -349,7 +376,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         gui.setItem(11, createGuiItem(Material.REDSTONE_BLOCK, FOLDER_SERVER,
                 List.of("§7Рестарт, выключение, техобслуживание,", "§7управление глобальным чатом.")));
         gui.setItem(12, createGuiItem(Material.EXPERIENCE_BOTTLE, FOLDER_ANTILAG,
-                List.of("§7Мониторинг TPS/ОЗУ, история замеров,", "§7умный Доктор (<1.0 TPS чистит всё).")));
+                List.of("§7Мониторинг TPS/ОЗУ, история замеров,", "§7умный Доктор (очистка дропа и мобов).")));
         gui.setItem(13, createGuiItem(Material.GRASS_BLOCK, FOLDER_WORLDS,
                 List.of("§7Телепорт по измерениям,", "§7быстрый переход в Незер/Энд.")));
         gui.setItem(14, createGuiItem(Material.CHEST, FOLDER_FILES,
@@ -400,7 +427,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         gui.setItem(10, createGuiItem(autoDoctorEnabled ? Material.LIME_DYE : Material.RED_DYE,
                 "§e§lАвто-Доктор", List.of(
                         "§7Статус: " + (autoDoctorEnabled ? "§aВКЛЮЧЕН" : "§cВЫКЛЮЧЕН"),
-                        "§7При TPS < 1.0 сносит всех мобов (кроме игроков) и дроп."
+                        "§7Автоматически очищает лишний дроп и мобов при просадке TPS."
                 )));
 
         gui.setItem(11, createGuiItem(soundEffectsEnabled ? Material.NOTE_BLOCK : Material.GRAY_DYE,
@@ -470,7 +497,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         gui.setItem(10, createGuiItem(Material.WRITABLE_BOOK, "§b§lОтправить команду консоли",
                 List.of("§7Нажмите и напишите команду в чат", "§7(выполнится от имени CONSOLE).")));
         gui.setItem(12, createGuiItem(Material.PAPER, "§e§lПоказать последние логи (чат)",
-                List.of("§7Выведет последние 20 строк logs/latest.log")));
+                List.of("§7Выведет последние строки logs/latest.log")));
         gui.setItem(14, createGuiItem(Material.EMERALD, "§a§lСохранить миры (save-all)",
                 List.of("§7Принудительно сохраняет данные миров.")));
         gui.setItem(16, createGuiItem(Material.REDSTONE, "§c§lВызвать сборку мусора (GC)",
@@ -548,7 +575,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         List<String> tpsLore = new ArrayList<>();
         tpsLore.add("§7Текущий TPS: §a" + String.format("%.2f", currentTps));
         tpsLore.add("§7Использование ОЗУ: §b" + (int) ramUsed + "MB / " + (int) ramMax + "MB");
-        tpsLore.add("§7Режим при TPS < 1.0: §cСнос всех мобов (кроме игроков) + дроп");
+        tpsLore.add("§7Режим: §eОчистка лишнего дропа и мобов в чанках");
         tpsLore.add("§7История замера TPS:");
         for (double t : tpsHistory) {
             tpsLore.add("§8- §a" + String.format("%.2f", t));
@@ -556,7 +583,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
 
         gui.setItem(11, createGuiItem(Material.PAPER, "§3§lМониторинг ресурсов", tpsLore));
         gui.setItem(15, createGuiItem(Material.EXPERIENCE_BOTTLE, "§a§lЗапустить Доктор сейчас",
-                List.of("§7При TPS < 1.0 — полная зачистка мобов и дропа,", "§7при TPS >= 1.0 — стандартная оптимизация.")));
+                List.of("§7Очищает обычный дроп и лишних мобов сверх лимита.")));
         gui.setItem(22, createGuiItem(Material.BARRIER, "§cНазад на Рабочий Стол"));
 
         player.openInventory(gui);
@@ -640,6 +667,32 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         player.openInventory(gui);
     }
 
+    private void fillBorder(Inventory gui) {
+        if (cachedBorderPane == null) {
+            cachedBorderPane = createGuiItem(Material.GRAY_STAINED_GLASS_PANE, " ");
+        }
+        for (int i = 0; i < gui.getSize(); i++) {
+            gui.setItem(i, cachedBorderPane);
+        }
+    }
+
+    private ItemStack createGuiItem(Material material, String name) {
+        return createGuiItem(material, name, null);
+    }
+
+    private ItemStack createGuiItem(Material material, String name, List<String> lore) {
+        ItemStack item = new ItemStack(material);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(name);
+            if (lore != null && !lore.isEmpty()) {
+                meta.setLore(lore);
+            }
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
     // ==================== ОБРОБКА КЛІКІВ ====================
 
     @EventHandler
@@ -650,9 +703,32 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
         String title = event.getView().getTitle();
         if (event.getClickedInventory() == null) return;
 
+        if (!title.equals(DESKTOP_TITLE) &&
+                !title.equals(FOLDER_SETTINGS) &&
+                !title.equals(SUBFOLDER_PANEL_CONFIG) &&
+                !title.equals(FOLDER_FILES) &&
+                !title.equals(FOLDER_CONSOLE) &&
+                !title.equals(SUBFOLDER_PLUGINS) &&
+                !title.equals(SUBFOLDER_ADMIN_TOOLS) &&
+                !title.equals(FOLDER_SERVER) &&
+                !title.equals(FOLDER_ANTILAG) &&
+                !title.equals(FOLDER_WORLDS) &&
+                !title.equals(PLAYERS_LIST) &&
+                !title.startsWith(PUNISH_PREFIX) &&
+                !title.startsWith(DURATION_PREFIX) &&
+                !title.equals(WEATHER_TITLE)) {
+            return;
+        }
+
+        event.setCancelled(true);
+        if (!event.getClickedInventory().equals(event.getView().getTopInventory())) {
+            return;
+        }
+
+        int slot = event.getRawSlot();
+
         if (title.equals(DESKTOP_TITLE)) {
-            event.setCancelled(true);
-            switch (event.getSlot()) {
+            switch (slot) {
                 case 10 -> openPlayerListMenu(player);
                 case 11 -> openServerControlMenu(player);
                 case 12 -> openAntilagFolder(player);
@@ -662,8 +738,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                 case 16 -> openSettingsFolder(player);
             }
         } else if (title.equals(FOLDER_SETTINGS)) {
-            event.setCancelled(true);
-            switch (event.getSlot()) {
+            switch (slot) {
                 case 10 -> openPanelConfigMenu(player);
                 case 12 -> openPluginsSubfolder(player);
                 case 14 -> openWeatherMenu(player);
@@ -671,8 +746,7 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                 case 22 -> openDesktop(player);
             }
         } else if (title.equals(SUBFOLDER_PANEL_CONFIG)) {
-            event.setCancelled(true);
-            switch (event.getSlot()) {
+            switch (slot) {
                 case 10 -> {
                     autoDoctorEnabled = !autoDoctorEnabled;
                     openPanelConfigMenu(player);
@@ -696,13 +770,11 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                 case 22 -> openSettingsFolder(player);
             }
         } else if (title.equals(FOLDER_FILES)) {
-            event.setCancelled(true);
-            int slot = event.getSlot();
+            File currentDir = currentBrowseDir.getOrDefault(player.getUniqueId(), getServerRoot());
             if (slot == 53) {
                 openDesktop(player);
                 return;
             }
-            File currentDir = currentBrowseDir.getOrDefault(player.getUniqueId(), getServerRoot());
             if (slot == 45) {
                 File parent = currentDir.getParentFile();
                 if (parent != null && isInsideServerRoot(parent)) {
@@ -710,297 +782,218 @@ public final class OPPanel extends JavaPlugin implements Listener, CommandExecut
                 }
                 return;
             }
-
-            ItemStack clicked = event.getCurrentItem();
-            if (clicked == null || !clicked.hasItemMeta() || clicked.getItemMeta().getDisplayName() == null) return;
-            String rawName = ChatColor.stripColor(clicked.getItemMeta().getDisplayName());
-            if (rawName.startsWith("[Папка] ")) {
-                String folderName = rawName.substring("[Папка] ".length());
-                File nextDir = new File(currentDir, folderName);
-                if (nextDir.isDirectory() && isInsideServerRoot(nextDir)) {
-                    openFilesFolder(player, nextDir);
+            if (slot >= 0 && slot < 45) {
+                ItemStack clicked = event.getCurrentItem();
+                if (clicked == null || !clicked.hasItemMeta() || clicked.getItemMeta().getDisplayName() == null) return;
+                String rawName = ChatColor.stripColor(clicked.getItemMeta().getDisplayName());
+                String targetName = rawName.replaceFirst("^\\[Папка\\]\\s*", "").replaceFirst("^\\[Файл\\]\\s*", "");
+                File target = new File(currentDir, targetName);
+                if (!isInsideServerRoot(target) || !target.exists()) {
+                    player.sendMessage("§c[OPPanel] Путь недоступен.");
+                    return;
                 }
-            } else if (rawName.startsWith("[Файл] ")) {
-                String fileName = rawName.substring("[Файл] ".length());
-                File targetFile = new File(currentDir, fileName);
-                if (targetFile.isFile() && isInsideServerRoot(targetFile)) {
-                    sendFilePreviewToChat(player, targetFile);
+                if (target.isDirectory()) {
+                    openFilesFolder(player, target);
+                } else {
+                    player.closeInventory();
+                    inspectFile(player, target);
                 }
             }
         } else if (title.equals(FOLDER_CONSOLE)) {
-            event.setCancelled(true);
-            switch (event.getSlot()) {
+            switch (slot) {
                 case 10 -> {
-                    awaitingConsoleCommand.add(player.getUniqueId());
                     player.closeInventory();
-                    player.sendMessage("§b[OPPanel Console] §eВведите команду в чат (без / или с /):");
+                    awaitingConsoleCommand.add(player.getUniqueId());
+                    player.sendMessage("§b[OPPanel Console] §fВведите команду в чат (без / или с /):");
                 }
                 case 12 -> {
                     player.closeInventory();
-                    sendLatestLogsToChat(player);
+                    File latestLog = new File(getServerRoot(), "logs/latest.log");
+                    inspectFile(player, latestLog);
                 }
-                case 14 -> {
-                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "save-all");
-                    player.sendMessage("§a[OPPanel Console] §7Выполнено сохранение миров.");
-                }
+                case 14 -> Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "save-all");
                 case 16 -> {
                     System.gc();
-                    player.sendMessage("§a[OPPanel Console] §7Запущен сборщик мусора (GC).");
+                    player.sendMessage("§a[OPPanel] Выполнена очистка памяти GC.");
                 }
                 case 22 -> openDesktop(player);
             }
         } else if (title.equals(SUBFOLDER_PLUGINS)) {
-            event.setCancelled(true);
-            if (event.getSlot() == 22) openSettingsFolder(player);
+            if (slot == 22) openSettingsFolder(player);
         } else if (title.equals(SUBFOLDER_ADMIN_TOOLS)) {
-            event.setCancelled(true);
-            switch (event.getSlot()) {
+            switch (slot) {
                 case 10 -> {
-                    if (godModeAdmins.contains(player.getUniqueId())) godModeAdmins.remove(player.getUniqueId());
-                    else godModeAdmins.add(player.getUniqueId());
+                    if (godModeAdmins.contains(player.getUniqueId())) {
+                        godModeAdmins.remove(player.getUniqueId());
+                    } else {
+                        godModeAdmins.add(player.getUniqueId());
+                    }
                     openAdminToolsSubfolder(player);
                 }
                 case 11 -> {
-                    if (vanishedAdmins.contains(player.getUniqueId())) {
-                        vanishedAdmins.remove(player.getUniqueId());
+                    UUID uuid = player.getUniqueId();
+                    if (vanishedAdmins.contains(uuid)) {
+                        vanishedAdmins.remove(uuid);
                         for (Player p : Bukkit.getOnlinePlayers()) p.showPlayer(this, player);
-                        player.sendMessage("§cVanish выключен.");
                     } else {
-                        vanishedAdmins.add(player.getUniqueId());
+                        vanishedAdmins.add(uuid);
                         for (Player p : Bukkit.getOnlinePlayers()) {
                             if (!hasAccess(p)) p.hidePlayer(this, player);
                         }
-                        player.sendMessage("§aVanish включен.");
                     }
                     openAdminToolsSubfolder(player);
                 }
                 case 12 -> {
-                    GameMode current = player.getGameMode();
-                    if (current == GameMode.SURVIVAL) player.setGameMode(GameMode.CREATIVE);
-                    else if (current == GameMode.CREATIVE) player.setGameMode(GameMode.ADVENTURE);
-                    else player.setGameMode(GameMode.SURVIVAL);
+                    GameMode next = switch (player.getGameMode()) {
+                        case SURVIVAL -> GameMode.CREATIVE;
+                        case CREATIVE -> GameMode.ADVENTURE;
+                        default -> GameMode.SURVIVAL;
+                    };
+                    player.setGameMode(next);
                     openAdminToolsSubfolder(player);
                 }
                 case 14 -> {
-                    giveAdminWand(player);
                     player.closeInventory();
+                    giveAdminWand(player);
                 }
                 case 16 -> {
-                    if (adminNotificationsDisabled.contains(player.getUniqueId())) adminNotificationsDisabled.remove(player.getUniqueId());
-                    else adminNotificationsDisabled.add(player.getUniqueId());
+                    if (adminNotificationsDisabled.contains(player.getUniqueId())) {
+                        adminNotificationsDisabled.remove(player.getUniqueId());
+                    } else {
+                        adminNotificationsDisabled.add(player.getUniqueId());
+                    }
                     openAdminToolsSubfolder(player);
                 }
                 case 22 -> openSettingsFolder(player);
             }
         } else if (title.equals(FOLDER_SERVER)) {
-            event.setCancelled(true);
-            switch (event.getSlot()) {
+            switch (slot) {
                 case 10 -> {
                     maintenanceMode = !maintenanceMode;
-                    Bukkit.broadcastMessage(maintenanceMode ? "§c[OPPanel] Сервер переведен в режим техобслуживания!" : "§a[OPPanel] Сервер снова открыт для всех!");
                     openServerControlMenu(player);
                 }
                 case 12 -> {
                     chatMuted = !chatMuted;
-                    Bukkit.broadcastMessage(chatMuted ? "§c[OPPanel] Чат заблокирован администратором." : "§a[OPPanel] Чат разблокирован.");
                     openServerControlMenu(player);
                 }
                 case 13 -> {
-                    for (Player online : Bukkit.getOnlinePlayers()) {
-                        if (!hasAccess(online)) {
-                            for (int i = 0; i < 100; i++) online.sendMessage(" ");
-                        }
-                    }
-                    player.closeInventory();
+                    for (int i = 0; i < 40; i++) Bukkit.broadcastMessage("");
+                    Bukkit.broadcastMessage("§e[OPPanel] Чат очищен администратором.");
                 }
-                case 15 -> Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), "restart");
-                case 16 -> Bukkit.shutdown();
+                case 15 -> {
+                    Bukkit.broadcastMessage("§c[OPPanel] Сервер перезапускается...");
+                    Bukkit.spigot().restart();
+                }
+                case 16 -> {
+                    Bukkit.broadcastMessage("§4[OPPanel] Сервер выключается...");
+                    Bukkit.shutdown();
+                }
                 case 22 -> openDesktop(player);
             }
         } else if (title.equals(FOLDER_ANTILAG)) {
-            event.setCancelled(true);
-            if (event.getSlot() == 15) {
-                String rep = executeSmartDoctor(Bukkit.getTPS()[0]);
-                player.sendMessage(rep);
+            if (slot == 15) {
+                String res = executeSmartDoctor(Bukkit.getTPS()[0]);
+                player.sendMessage(res);
                 openAntilagFolder(player);
-            } else if (event.getSlot() == 22) openDesktop(player);
+            } else if (slot == 22) {
+                openDesktop(player);
+            }
         } else if (title.equals(FOLDER_WORLDS)) {
-            event.setCancelled(true);
-            switch (event.getSlot()) {
+            switch (slot) {
                 case 10 -> {
-                    player.teleport(Bukkit.getWorlds().get(0).getSpawnLocation());
-                    player.closeInventory();
+                    World w = Bukkit.getWorld("world");
+                    if (w != null) player.teleport(w.getSpawnLocation());
                 }
                 case 12 -> {
-                    World n = Bukkit.getWorld("world_nether");
-                    if (n != null) player.teleport(n.getSpawnLocation());
-                    player.closeInventory();
+                    World w = Bukkit.getWorld("world_nether");
+                    if (w != null) player.teleport(w.getSpawnLocation());
                 }
                 case 14 -> {
-                    World e = Bukkit.getWorld("world_the_end");
-                    if (e != null) player.teleport(e.getSpawnLocation());
-                    player.closeInventory();
+                    World w = Bukkit.getWorld("world_the_end");
+                    if (w != null) player.teleport(w.getSpawnLocation());
                 }
                 case 22 -> openDesktop(player);
             }
-        } else if (title.equals(WEATHER_TITLE)) {
-            event.setCancelled(true);
-            World w = player.getWorld();
-            switch (event.getSlot()) {
-                case 10 -> w.setTime(1000);
-                case 12 -> w.setTime(13000);
-                case 14 -> {
-                    w.setStorm(false);
-                    w.setThundering(false);
-                }
-                case 16 -> w.setStorm(true);
-                case 22 -> openSettingsFolder(player);
-            }
         } else if (title.equals(PLAYERS_LIST)) {
-            event.setCancelled(true);
-            if (event.getSlot() == 53) {
+            if (slot == 53) {
                 openDesktop(player);
                 return;
             }
-            ItemStack item = event.getCurrentItem();
-            if (item != null && item.getType() == Material.PLAYER_HEAD && item.getItemMeta() instanceof SkullMeta meta) {
-                if (meta.getOwningPlayer() != null) {
-                    Player target = meta.getOwningPlayer().getPlayer();
-                    if (target != null) openPunishMenu(player, target);
+            ItemStack clicked = event.getCurrentItem();
+            if (clicked != null && clicked.getType() == Material.PLAYER_HEAD && clicked.hasItemMeta()) {
+                String name = ChatColor.stripColor(clicked.getItemMeta().getDisplayName());
+                Player target = Bukkit.getPlayerExact(name);
+                if (target != null) {
+                    openPunishMenu(player, target);
                 }
             }
         } else if (title.startsWith(PUNISH_PREFIX)) {
-            event.setCancelled(true);
-            if (event.getSlot() == 22) {
+            if (slot == 22) {
                 openPlayerListMenu(player);
                 return;
             }
-            UUID targetUUID = selectedTarget.get(player.getUniqueId());
-            Player target = targetUUID != null ? Bukkit.getPlayer(targetUUID) : null;
-            if (target == null || !target.isOnline()) {
-                player.closeInventory();
+            UUID targetUuid = selectedTarget.get(player.getUniqueId());
+            Player target = targetUuid != null ? Bukkit.getPlayer(targetUuid) : null;
+            if (target == null) {
+                player.sendMessage("§cИгрок вышел из сети.");
+                openPlayerListMenu(player);
                 return;
             }
-
-            switch (event.getSlot()) {
+            switch (slot) {
                 case 9 -> player.teleport(target.getLocation());
                 case 10 -> target.teleport(player.getLocation());
                 case 11 -> player.openInventory(target.getInventory());
                 case 12 -> {
                     target.setHealth(20.0);
                     target.setFoodLevel(20);
-                    player.sendMessage("§aИгрок вылечен.");
+                    player.sendMessage("§aИгрок " + target.getName() + " вылечен.");
                 }
                 case 13 -> {
-                    if (frozenPlayers.contains(target.getUniqueId())) frozenPlayers.remove(target.getUniqueId());
-                    else frozenPlayers.add(target.getUniqueId());
-                    openPunishMenu(player, target);
+                    if (frozenPlayers.contains(target.getUniqueId())) {
+                        frozenPlayers.remove(target.getUniqueId());
+                        player.sendMessage("§eИгрок " + target.getName() + " разморожен.");
+                    } else {
+                        frozenPlayers.add(target.getUniqueId());
+                        player.sendMessage("§bИгрок " + target.getName() + " заморожен.");
+                    }
                 }
                 case 14 -> {
+                    player.closeInventory();
                     target.kickPlayer("§cКикнут администратором.");
-                    openPlayerListMenu(player);
                 }
-                case 15 -> openDurationMenu(player, event.isRightClick() ? "Warn" : "Mute");
-                case 16 -> openDurationMenu(player, "Ban");
+                case 15 -> openDurationMenu(player, "mute");
+                case 16 -> openDurationMenu(player, "ban");
             }
         } else if (title.startsWith(DURATION_PREFIX)) {
-            event.setCancelled(true);
-            UUID targetUUID = selectedTarget.get(player.getUniqueId());
-            Player target = targetUUID != null ? Bukkit.getPlayer(targetUUID) : null;
-            String type = pendingPunishmentType.get(player.getUniqueId());
-            if (target == null || type == null) {
-                player.closeInventory();
-                return;
-            }
-
-            String duration = switch (event.getSlot()) {
-                case 10 -> "1m";
-                case 11 -> "1h";
-                case 13 -> "1d";
-                case 14 -> "7d";
-                case 15 -> "30d";
-                case 16 -> "perm";
-                default -> null;
-            };
-
-            if (duration != null) {
-                if (type.equals("Ban") && duration.equals("perm")) {
-                    Bukkit.getBanList(org.bukkit.BanList.Type.NAME).addBan(target.getName(), "Нарушение", null, player.getName());
-                    target.kickPlayer("§cБан навсегда.");
-                } else {
-                    player.performCommand(type.toLowerCase() + " " + target.getName() + " " + duration + " Нарушение");
-                }
-                openPlayerListMenu(player);
-            }
-        }
-    }
-
-    private void sendFilePreviewToChat(Player player, File file) {
-        if (file.length() > 64 * 1024) {
-            player.sendMessage("§c[OPPanel Files] Файл слишком большой (>64KB) для вывода в чат.");
-            return;
-        }
-        String lower = file.getName().toLowerCase(Locale.ROOT);
-        if (!(lower.endsWith(".yml") || lower.endsWith(".yaml") || lower.endsWith(".properties")
-                || lower.endsWith(".json") || lower.endsWith(".txt") || lower.endsWith(".log")
-                || lower.endsWith(".toml") || lower.endsWith(".conf"))) {
-            player.sendMessage("§e[OPPanel Files] Выбран бинарный/нетекстовый файл: §f" + file.getName());
-            return;
-        }
-
-        try {
-            List<String> lines = Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
+            ItemStack clicked = event.getCurrentItem();
+            if (clicked == null || !clicked.hasItemMeta()) return;
+            String duration = ChatColor.stripColor(clicked.getItemMeta().getDisplayName());
+            String type = pendingPunishmentType.remove(player.getUniqueId());
+            UUID targetUuid = selectedTarget.get(player.getUniqueId());
+            Player target = targetUuid != null ? Bukkit.getPlayer(targetUuid) : null;
             player.closeInventory();
-            player.sendMessage("§6§m---------- §e" + file.getName() + " §6§m----------");
-            int start = Math.max(0, lines.size() - 18);
-            for (int i = start; i < lines.size(); i++) {
-                player.sendMessage("§7" + lines.get(i));
+            if (target != null && type != null) {
+                if ("ban".equals(type)) {
+                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "ban " + target.getName() + " Нарушение правил (" + duration + ")");
+                } else {
+                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "mute " + target.getName() + " " + duration + " Нарушение правил");
+                }
             }
-        } catch (IOException ex) {
-            player.sendMessage("§c[OPPanel Files] Ошибка чтения файла: " + ex.getMessage());
-        }
-    }
-
-    private void sendLatestLogsToChat(Player player) {
-        File logFile = new File(getServerRoot(), "logs/latest.log");
-        if (!logFile.exists()) {
-            player.sendMessage("§c[OPPanel Console] Файл logs/latest.log не найден.");
-            return;
-        }
-        try {
-            List<String> lines = Files.readAllLines(logFile.toPath(), StandardCharsets.UTF_8);
-            player.sendMessage("§b§m------ §3Последние строки latest.log §b§m------");
-            int start = Math.max(0, lines.size() - 20);
-            for (int i = start; i < lines.size(); i++) {
-                player.sendMessage("§8| §7" + lines.get(i));
-            }
-        } catch (IOException ex) {
-            player.sendMessage("§c[OPPanel Console] Ошибка чтения логов: " + ex.getMessage());
-        }
-    }
-
-    private void fillBorder(Inventory gui) {
-        int size = gui.getSize();
-        for (int i = 0; i < size; i++) {
-            boolean edge = i < 9 || i >= size - 9 || i % 9 == 0 || (i + 1) % 9 == 0;
-            if (edge) {
-                gui.setItem(i, (i % 2 == 0) ? cachedBorderPane : cachedAccentPane);
+        } else if (title.equals(WEATHER_TITLE)) {
+            World world = player.getWorld();
+            switch (slot) {
+                case 10 -> world.setTime(1000L);
+                case 12 -> world.setTime(13000L);
+                case 14 -> {
+                    world.setStorm(false);
+                    world.setThundering(false);
+                }
+                case 16 -> {
+                    world.setStorm(true);
+                    world.setThundering(true);
+                }
+                case 22 -> openSettingsFolder(player);
             }
         }
-    }
-
-    private ItemStack createGuiItem(Material material, String name, List<String> lore) {
-        ItemStack item = new ItemStack(material);
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(name);
-            if (lore != null) meta.setLore(lore);
-            item.setItemMeta(meta);
-        }
-        return item;
-    }
-
-    private ItemStack createGuiItem(Material material, String name) {
-        return createGuiItem(material, name, null);
     }
 }
